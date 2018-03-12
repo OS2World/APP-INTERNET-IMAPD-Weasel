@@ -1,0 +1,90 @@
+2017-12-15 ver. 0.1.5
+  - Applying disk quotas to new domains and users - fixed.
+
+2017-11-21 ver. 0.1.4
+  - Fixed bug in <MailRoot>\imap.xml loading procedure after the user deletion.
+
+2017-11-15 ver. 0.1.3
+  - Delayed responces: POP3 and IMAP4 - on invalid username/password, IMAP4 -
+    for "BAD" responces.
+
+2017-11-09 ver. 0.1.2
+  - Fixed two bugs in mail storage scannings procedures.
+  - New log records (for storage scanning time), loglevel increased for some
+    annoying log records.
+
+2017-11-01 ver. 0.0.10
+  - Mail storage/domain/user disk quotas.
+  - QUOTA extension [RFC 2087] is implemented.
+  - MOVE extension [RFC 6851] is implemented.
+  - RFC 5530 response codes.
+  - Domain aliases in the username is allowed now.
+  - New commands for protocol to control imapd on local named sockets.
+  - Examples (REXX) for the local control protocol.
+  - A new imapStage4.cmd script.
+  - POP3 server.
+  - Plain-text passwords is not allowed by default now, switch -E is deprecated.
+  - Generic network server optimization.
+  - readme.txt updates.
+  - Default file names for SSL certificate and key changed to imapd.crt and
+    imapd.key.
+
+2017-10-07 ver. 0.0.9
+  - SSL connections support (for clients who want to use a secure connection
+    but can not use STARTTLS).
+  - More detailed log record about client connection.
+
+2017-10-06 ver. 0.0.8
+  - Delayed imap.xml files saving on CHECK command and the session close.
+  - The Dirty flag for loaded user home directory objects to avoid rewrite
+    imap.xml files without changes.
+  - Keep several home directory objects loaded even if they do not have open
+    sessions.
+  - IDLE command moved to Authenticated/Selected State from Selected State as
+    required by RFC 2177.
+  - A new fast high memory manager.
+  - Increased use of high memory.
+  - Fixed incorrect weasel.INI/weasel.TNI load default order (before checking
+    configured TNI/INI type).
+  - gcc optimizations: -march=pentium -msse -O3
+  - There was no client notification about changes in mailbox (RECENT/EXISTS)
+    on APPEND - fixed.
+  - Fixed several minor bugs.
+
+2017-09-28 ver. 0.0.7
+  - IMAP4 IDLE command [RFC 2177] is implemented.
+  - UIDPLUS extension [RFC 4315] is implemented.
+
+2017-09-27 ver. 0.0.6
+  - Hotfix for messages without/invalid Content-Type header filed.
+
+2017-09-26 ver. 0.0.5
+  - ROTATE signal for the command-line switch -s
+  - Asynchronous EXISTS and EXPUNGE responses.
+  - Protocol to control imapd on local named sockets.
+  - Stage 4 filter for Weasel.
+  - Fast-tracking incoming messages with Weasel detailed log pipe (sw. -w).
+  - readme.txt updates.
+
+2017-09-21 ver. 0.0.4
+  - Store changed data to imap.xml files on killing imapd or crash.
+  - A new command-line switch -s to send signals to the runned imapd.
+
+2017-09-20 ver. 0.0.3
+  - Fixed: Switch between TNI/INI during imapd execution causes reloads Weasel
+    configuration every 5 sec.
+  - Authentication mechanism CRAM-MD5 implemented.
+  - LOGIN and plain-text authentication which does not accord with CAPABILITY
+    was alowed - fixed.
+  - "Bad password limit" option on the Options 1 page of Setup now applied.
+  - Close sessions on series of "BAD" responces.
+  - "Identifying a POP3 user" -> "Accept only the first username/domain match"
+    option on the Options 2 page of Setup now applied.
+
+2017-09-19 ver. 0.0.2
+  - Added support for TNI files.
+  - Fixed false positive events "all threads are busy".
+  - Fixed a crash on command syntax errors.
+
+2017-09-18 ver. 0.0.1
+  - First public test version.

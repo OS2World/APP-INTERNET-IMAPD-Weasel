@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<quotas>
+
+  <!-- Enable disk quotas.
+       Set the value to "1", "Yes" or "Y" to enable quotas.
+  -->
+  <enable>0</enable>
+
+
+  <!-- Template for notification letter. -->
+
+  <notification-letter>
+    <!--
+       Node "body" specifies the text of notification message.
+       Attribute "from" used as return-path for message. This can be the
+       complete local email address or only username without domain part. In
+       second case the domain part will be selected automatically. It is
+       recommended that you specify a user with the attribute "non-blocked"
+       set to 1 (see nodes "user" below).
+
+       Allowed macros:
+
+         $(RCPT)
+         The address of user who will be notified.
+
+         $(FROM)
+         Address is taken or extended from the attribute "from" of "body" node.
+
+         $(FROM_DOMAIN)
+         Domain part of $(FROM).
+
+         $(MSG-ID)
+         FRC 822 Message-ID value.
+
+         $(DATE)
+         Current date and time. The syntax corresponds to the "date-time" in
+         [RFC822].
+
+         $(BOUNDARY)
+         Boundary string for multipard message.
+
+         $(OBJECTS,separator)
+         List of objects that have reached the limit separated by string
+         separator.
+         Special characters that can be used in separator:
+           \r - will be replaced by new-line (0x0D) character,
+           \n - will be replaced by carriage-return (0x0A) character,
+           \t - will be replaced by TAB (0x09) character.
+
+         $(MESSAGE)
+         Original user message body.
+    -->
+     <body from="@postmaster">
+Message-ID: limit$(MSG-ID)
+Date: $(DATE)
+From: $(FROM)
+To: $(RCPT)
+MIME-Version: 1.0
+Subject: Delivery failed
+Content-Type: multipart/mixed;
+	boundary="$(BOUNDARY)"
+
+--$(BOUNDARY)
+Content-Type: text/plain; charset=us-ascii
+Content-Transfer-Encoding: 7bit
+
+This is an automatically generated Delivery Status Notification.
+Delivery to the following recipients failed permanently:
+
+	$(OBJECTS,\r\n\t)
+
+Reason: mailbox quota exceeded.
+
+--$(BOUNDARY)
+Content-Type: message/rfc822; name="message.eml"
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename="message.eml"
+
+$(MESSAGE)
+
+--$(BOUNDARY)--
+    </body>
+  </notification-letter>
+
+
+  <!-- Presets for size limits. -->
+
+  <presets>
+
+    <quota name="vip">
+      <limit>400M</limit>
+    </quota>
+
+    <quota name="recently-opened">
+      <limit>100M</limit>
+    </quota>
+
+  </presets>
+
+
+  <!-- List of limits for domains. -->
+
+  <mail-root>
+
+    <!-- Global mail storage limit. There is no limit if not specified. -->
+    <limit>5 Gb</limit>
+
+    <domain name="solar-system.milky-way.universe">
+
+      <!-- Domain mail storage limit. If not specified only the global limit
+           is affected.
+      -->
+      <limit>3Gb</limit>
+
+      <!-- No limit for postmaster@solar-system.milky-way.universe.
+           Only domain and mail-root limits affect postmaster.
+           Attribute "non-blocked":
+             "1", "Yes" or "Y" - Operations on mailboxes will not be blocked on
+                                 reaching limit.
+      -->
+      <user name="postmaster" non-blocked="1"/>
+
+      <!-- User mercury can use only 100 Mb. -->
+      <user name="mercury">
+        <limit>100Mb</limit>
+      </user>
+
+      <user name="venus">
+        <!-- Get limit value from "vip" preset. See node "presets" above. -->
+        <quota>vip</quota>
+      </user>
+
+      <!-- No limit for the next user. Only domain and mail-root limits affect
+           the user.
+      -->
+      <user name="earth"/>
+
+      <user name="mars">
+        <quota>vip</quota>
+      </user>
+
+      <!-- For all other users in solar-system.milky-way.universe domain. -->
+      <user>
+        <limit>70 Mb</limit>
+      </user>
+
+    </domain>
+
+    <domain name="ipsilon-andromeda.milky-way.universe">
+
+      <limit>3 Gb</limit>
+
+      <user name="postmaster" non-blocked="1">
+        <limit>100 Mb</limit>
+      </user>
+
+      <user name="planet.b">
+        <limit>100 Mb</limit>
+      </user>
+
+      <user name="planet.d">
+
+        <!-- If both values "quota" and "limit" are specified, the minimum
+             value will be used. -->
+
+        <quota>recently-opened</quota>
+        <limit>300 Mb</limit>
+
+      </user>
+
+      <!-- There are no individual limits for other users in this domain.
+           They are affected only by domain and mail-root limits. -->
+      <user/>
+
+    </domain>
+
+
+    <!-- All other domains on the server will have next limit by default. -->
+
+    <domain>
+      <limit>2 Gb</limit>
+
+      <!-- Users should not be listed here. -->
+
+    </domain>
+
+    <!-- Note: For single-domain mode you should specify only one domain node
+               without name attribute. -->
+
+  </mail-root>
+
+</quotas>
