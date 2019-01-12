@@ -209,6 +209,8 @@ static ULONG _mboxAddMessage(PMAILBOX pMailbox, PSZ pszFName, ULONG ulFlags)
   return pMsg->ulUID;
 }
 
+/*
+2018-05-11 - Replaced with _mboxGetCnt()
 static BOOL _mboxGetRecentCnt(PMAILBOX pMailbox)
 {
   ULONG      ulIdx;
@@ -221,6 +223,7 @@ static BOOL _mboxGetRecentCnt(PMAILBOX pMailbox)
   return ulCount;
 }
 
+2018-05-11 - No need any more.
 // Returns sequence number (1..N).
 static ULONG _mboxGetFirstUnseen(PMAILBOX pMailbox)
 {
@@ -231,6 +234,27 @@ static ULONG _mboxGetFirstUnseen(PMAILBOX pMailbox)
       return (ulIdx + 1);
 
   return 0;
+}
+*/
+
+static VOID _mboxGetCnt(PMAILBOX pMailbox, PULONG pulRecent, PULONG pulUnseen)
+{
+  ULONG      ulIdx;
+  ULONG      ulRecent = 0;
+  ULONG      ulUnseen = 0;
+
+  for( ulIdx = 0; ulIdx < pMailbox->cMessages; ulIdx++ )
+  {
+    if ( (pMailbox->papMessages[ulIdx]->ulFlags & FSMSGFL_RECENT) != 0 )
+      ulRecent++;
+    if ( (pMailbox->papMessages[ulIdx]->ulFlags & FSMSGFL_SEEN) == 0 )
+      ulUnseen++;
+  }
+
+  if ( pulRecent != NULL )
+    *pulRecent = ulRecent;
+  if ( pulUnseen != NULL )
+    *pulUnseen = ulUnseen;
 }
 
 
@@ -1674,8 +1698,13 @@ BOOL fsSessOpen(PUHSESS pUHSess, PSZ pszHomeDir)
   }
 
   ulRC = DosRequestMutexSem( hmtxHome, SEM_INDEFINITE_WAIT );
+//  ulRC = DosRequestMutexSem( hmtxHome, 2000 );
   if ( ulRC != NO_ERROR )
+  {
+//logf( 1, "[EXT] fsSessOpen(): DosRequestMutexSem(hmtxHome,), rc = %u", ulRC );
     debug( "DosRequestMutexSem(), rc = %u", ulRC );
+    return FALSE;
+  }
 
   for( pHome = (PUSERHOME)lnkseqGetFirst( &lsHome ); pHome != NULL;
        pHome = (PUSERHOME)lnkseqGetNext( pHome ) )
@@ -1957,24 +1986,25 @@ BOOL fsQueryMailbox(PUHSESS pUHSess, PSZ pszMailbox, ULONG ulOp,
 
     pUHSess->pSelMailbox   = pMailbox;
     pUHSess->fSelMailboxRO = ( pMailbox != NULL ) && ( ulOp == FSGMB_EXAMINE );
+  }
 
-    // 2017-09-25 Call _homeCheckInbox() moved here from fsQueryMailbox().
-    if ( ( pMailbox != NULL ) &&
-         ( (pUHSess->pHome->ulFlags & FSUHF_INBOX_CHECKED) == 0 ) &&
-         ( stricmp( pVDir->pszName, "INBOX" ) == 0 ) )
-    {
-      //debugCP( "call _homeCheckInbox()..." );
-      _homeCheckInbox( pUHSess->pHome );    // Synchronize INBOX.
-    }
+  // 2017-09-25 Call _homeCheckInbox() moved here from _homeNew().
+  // 2018-05-11 Moved out from "if ( ulOp != FSGMB_STATUS )" block.
+  if ( ( pMailbox != NULL ) &&
+       ( (pUHSess->pHome->ulFlags & FSUHF_INBOX_CHECKED) == 0 ) &&
+       ( stricmp( pszMailbox, "INBOX" ) == 0 ) )
+//       ( stricmp( pVDir->pszName, "INBOX" ) == 0 ) )
+  {
+    //debugCP( "call _homeCheckInbox()..." );
+    _homeCheckInbox( pUHSess->pHome );    // Synchronize INBOX.
   }
 
   if ( ( pMailbox != NULL ) && ( pInfo != NULL ) )
   {
     pInfo->ulExists       = pMailbox->cMessages;
-    pInfo->ulRecent       = _mboxGetRecentCnt( pMailbox );
-    pInfo->ulUnseen       = _mboxGetFirstUnseen( pMailbox );
     pInfo->ulUIDValidity  = pMailbox->ulUIDValidity;
     pInfo->ulUIDNext      = pMailbox->ulUIDNext;
+    _mboxGetCnt( pMailbox, &pInfo->ulRecent, &pInfo->ulUnseen );
   }
 
   _sessUnlockHome( pUHSess );
@@ -2914,7 +2944,7 @@ BOOL fsGetChanges(PUHSESS pUHSess, PFSCHANGES pChanges, ULONG ulWaitHomeTime)
     pChanges->ulExists = pUHSess->pSelMailbox->cMessages;
 
   if ( (pUHSess->ulFlags & FSSESSFL_RECENTCH) != 0 )
-    pChanges->ulRecent = _mboxGetRecentCnt( pUHSess->pSelMailbox );
+    _mboxGetCnt( pUHSess->pSelMailbox, &pChanges->ulRecent, NULL );
 
   pChanges->cChgMsg = pUHSess->cChgMsg;
   pChanges->pChgMsg = pUHSess->pChgMsg;

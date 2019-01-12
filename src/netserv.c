@@ -636,7 +636,7 @@ static BOOL _srvClientRead(PCLNTDATA pClntData)
         if ( pClntData->ulMaxRawBlock == 0 )
         {
           // Input mode is switched to RAW-input. Move remaining data to the
-          // beginning of buffer.
+          // beginning of the buffer.
           memcpy( pClntData->pcRXData, pcRead, cbRead );
           pcRead = pClntData->pcRXData;
         }
@@ -1303,8 +1303,18 @@ PSERVDATA netsrvCreate(PNSPROTO pProtocol, PNSCREATEDATA pCreateData)
     return NULL;
   }
 
+  logf( 6, "%s Start %u thread(s) (%u max.)...",
+        pServData->pProtocol->acLogId, pCreateData->ulThreads,
+        pCreateData->ulMaxThreads );
   for( ulRC = 0; ulRC < pCreateData->ulThreads; ulRC++ )
-    _beginthread( threadClient, NULL, 65535, pServData );
+  {
+    if ( _beginthread( threadClient, NULL, 65535, pServData ) == -1 )
+    {
+      logWriteFmt( 0, "%s Could not start thread #%u",
+                   pServData->pProtocol->acLogId, ulRC );
+      break;
+    }
+  }
 
   // Insert a new server to the global servers list.
   lnkseqAdd( &lsServers, pServData );
@@ -1585,6 +1595,14 @@ BOOL netsrvProcess(ULONG ulTimeout)
             - Call protocol idle function if it specified.  */
 
       _srvLockClients( pServData );
+
+#ifdef DEBUG_CODE
+      if ( pServData->cThreadsBusy == pServData->cThreads )
+        debug( "All %u threads are busy, we have %u clients, %u threatds max.",
+               pServData->cThreadsBusy,
+               lnkseqGetCount( &pServData->lsPendClients ),
+               pServData->ulMaxThreads );
+#endif
 
       ulCount = !lnkseqIsEmpty( &pServData->lsPendClients ) &&
                 ( pServData->cThreadsBusy == pServData->cThreads ) &&

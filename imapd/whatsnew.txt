@@ -1,3 +1,27 @@
+2018-11-20 ver. 0.1.9
+  - The order of the values of ServerPort and TimeOut configuration keys has
+    changed in recent versions of Weasel. Corresponding changes for IMAPD are
+    made.
+  - Minor changes in readme.txt.
+
+2018-11-17 ver. 0.1.8
+  - IMAP4 service did not go into the "enabled" state with modern versions of
+    Weasel. The meaning of bits of configuration [$SYS]/Enable key has changed.
+    Fixed.
+    Therefore, this version of IMAPD should be used with new versions of Weasel
+    (2.48c and higher).
+  - If configuration key [$SYS]/MailRoot is not set, then the value
+    ".\MailRoot\" is used.
+
+2018-05-13 ver. 0.1.7
+  - Fixed a potential deadlock during CRAM-MD5 authorization.
+
+2018-05-11 ver. 0.1.6
+  - The contents of INBOX were not filled for the new user if the first was
+    command STATUS INBOX (...) instead SELECT INBOX - fixed.
+  - Request STATUS INBOX (UNSEEN) returned the sequence number of the first
+    UNSEEN flagged message instead of the number of unread messages - fixed.
+
 2017-12-15 ver. 0.1.5
   - Applying disk quotas to new domains and users - fixed.
 

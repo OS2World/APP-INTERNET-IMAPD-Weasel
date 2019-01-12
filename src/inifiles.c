@@ -445,6 +445,7 @@ static PTNIAPP _tniReadApp(PTNIREAD pReadData, ULONG cbName, PCHAR pcName)
     if ( ( pKey != NULL ) &&
          !_insertItem( (PVOID **)&pApp->papKey, &pApp->cKey, pKey ) )
     {
+      debugCP( "_insertItem() failed" );
       hfree( pKey );
       fError = TRUE;
       break;
@@ -473,7 +474,10 @@ static LHANDLE APIENTRY tniOpen(LHANDLE hab, PSZ pszFileName)
   BOOL       fError = FALSE;
 
   if ( pTNI == NULL )
-   return NULLHANDLE;
+  {
+    debugCP( "Not enough memory" );
+    return NULLHANDLE;
+  }
 
   memset( &stReadData, 0, sizeof(TNIREAD) );
 
@@ -502,12 +506,14 @@ static LHANDLE APIENTRY tniOpen(LHANDLE hab, PSZ pszFileName)
     pApp = _tniReadApp( &stReadData, cbLine - 1, &pszLine[1] );
     if ( pApp == NULL )
     {
+      debugCP( "_tniReadApp() failed" );
       fError = TRUE;
       break;
     }
 
     if ( !_insertItem( (PVOID **)&pTNI->papApp, &pTNI->cApp, pApp ) )
     {
+      debugCP( "_insertItem() failed" );
       _tniFreeApp( pApp );
       fError = TRUE;
       break;

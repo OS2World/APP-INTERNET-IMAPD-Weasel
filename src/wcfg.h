@@ -47,6 +47,9 @@ ULONG wcfgQueryBadPasswordLimit();
 // Users enumeration for given username (with or w/o domain part).
 // Only records with flags WC_USRFL_* specified by ulReqFlags will be
 // processed.
+// Warning: The configuration will be locked before the function
+// wcfgFindUserEnd() is called. Calling other wcfg*() functions before calling
+// function wcfgFindUserEnd() after wcfgFindUserBegin() will block the thread.
 PWCFINDUSR wcfgFindUserBegin(PSZ pszUser, ULONG ulReqFlags);
 VOID wcfgFindUserEnd(PWCFINDUSR pFind);
 BOOL wcfgFindUser(PWCFINDUSR pFind);

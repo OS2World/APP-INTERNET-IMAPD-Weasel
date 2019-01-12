@@ -375,6 +375,7 @@ ULONG _wcfgLoad(PSZ pszFile, ULONG ulINIType, PUTILFTIMESTAMP pFTimestamp,
     {
       if ( ( ulINIType == INITYPE_TNI ) != ( ulUseTNI != 0 ) )
       {
+        debugCP( "return _LOAD_WANT_OTHER_TYPE" );
         iniClose( &stINI );
         return _LOAD_WANT_OTHER_TYPE;
       }
@@ -387,24 +388,28 @@ ULONG _wcfgLoad(PSZ pszFile, ULONG ulINIType, PUTILFTIMESTAMP pFTimestamp,
                          acMailRool, sizeof(acMailRool) - 2 );
   if ( ulRC == 0 )
   {
-    logs( 0, "MailRoot path is not specified by the Weasel configuration" );
+    debug( "Key [$SYS]/MailRoot is not specified. Path \".\\MailRoot\\\" will be used." );
+    strcpy( acMailRool, ".\\MailRoot\\" );
+/*    logs( 0, "MailRoot path is not specified by the Weasel configuration" );
     iniClose( &stINI );
-    return _LOAD_NO_MAILROOT;
+    return _LOAD_NO_MAILROOT;*/
   }
-
-/* [Not good for -Wall]
-  *((PUSHORT)&acMailRool[ulRC]) = 
-    acMailRool[ulRC - 1] != '\\' ? (USHORT)0x005C : 0;*/
-  if ( acMailRool[ulRC - 1] != '\\' )
-    acMailRool[ulRC++] = '\\';
-  acMailRool[ulRC] = '\0';
+  else
+  {
+    if ( acMailRool[ulRC - 1] != '\\' )
+      acMailRool[ulRC++] = '\\';
+    acMailRool[ulRC] = '\0';
+  }
 
   debug( "MailRoot: %s", acMailRool );
 
-  // Key "Enable": bits: 0x01 - SMTP, 0x02 - POP3, 0x04 - IMAP4.
-  ulRC = _iniQueryLong( &stINI, "$SYS", "Enable", 0x04 );
-  fIMAPEnabled = (ulRC & 0x04) != 0;
-  fPOP3Enabled = (ulRC & 0x02) != 0;
+  // Key "Enable": bits (for Weasel 2.48c):
+  //   0x01 - POP3, 0x02 - SMTP, 0x04 - MSA, 0x08 - IMAP4.
+  ulRC = _iniQueryLong( &stINI, "$SYS", "Enable", 0x08 );
+  debug( "[$SYS], key Enable = 0x%X", ulRC );
+
+  fIMAPEnabled = (ulRC & 0x08) != 0;
+  fPOP3Enabled = (ulRC & 0x01) != 0;
 
   ulRC = iniQueryString( &stINI, "$SYS", "IMAPLogFileName", NULL,
                          acLogFile, sizeof(acLogFile) - 1 );
@@ -414,31 +419,31 @@ ULONG _wcfgLoad(PSZ pszFile, ULONG ulINIType, PUTILFTIMESTAMP pFTimestamp,
   ulLogFlags = _iniQueryLong( &stINI, "$SYS", "IMAPTransLevel",
                               LOGFL_DISK | LOGFL_SCREEN );
 
-  // Key "MaxUsers": four ULONG values: 0 - SMTP, 1 - POP3, 2 - IMAP4,
-  //                                    3 - SMTP, message submission.
+  // Key "MaxUsers": four ULONG values: 0 - POP3, 1 - SMTP, 2 - MSA, 3 - IMAP.
   cbData = sizeof(aulData);
   if ( iniQueryData( &stINI, "$SYS", "MaxUsers", &aulData, &cbData ) )
   {
-    ulPOP3MaxClients = aulData[1];
-    ulIMAPMaxClients = aulData[2];
+    ulPOP3MaxClients = aulData[0];
+    ulIMAPMaxClients = aulData[3];
+    debug( "MaxUsers: POP3: %lu, IMAP: %lu", ulPOP3MaxClients, ulIMAPMaxClients );
   }
 
-  // Key "ServerPort": four ULONG values: 0 - SMTP, 1 - POP3, 2 - IMAP4,
-  //                                      3 - SMTP, message submission.
+  // Key "ServerPort": four ULONG values: 0 - POP3, 1 - SMTP, 2 - MSA, 3 - IMAP.
   cbData = sizeof(aulData);
   if ( iniQueryData( &stINI, "$SYS", "ServerPort", &aulData, &cbData ) )
   {
-    ulPOP3BindPort = aulData[1];
-    ulIMAPBindPort = aulData[2];
+    ulPOP3BindPort = aulData[0];
+    ulIMAPBindPort = aulData[3];
+    debug( "Ports: POP3: %lu, IMAP: %lu", ulPOP3BindPort, ulIMAPBindPort );
   }
 
-  // Key "TimeOut": four ULONG values: 0 - SMTP, 1 - POP3, 2 - IMAP4,
-  //                                   3 - SMTP, message submission.
+  // Key "TimeOut": four ULONG values: 0 - POP3, 1 - SMTP, 2 - MSA, 3 - IMAP.
   cbData = sizeof(aulData);
   if ( iniQueryData( &stINI, "$SYS", "TimeOut", &aulData, &cbData ) )
   {
-    ulPOP3Timeout = aulData[1];
-    ulIMAPTimeout = aulData[2];
+    ulPOP3Timeout = aulData[0];
+    ulIMAPTimeout = aulData[3];
+    debug( "TimeOut: POP3: %lu, IMAP: %lu", ulPOP3Timeout, ulIMAPTimeout );
   }
 
   fMultiDomain = _iniQueryLong( &stINI, "$SYS", "MultiDomainEnabled", 0 ) != 0;
@@ -446,9 +451,12 @@ ULONG _wcfgLoad(PSZ pszFile, ULONG ulINIType, PUTILFTIMESTAMP pFTimestamp,
   {
     // Single domain mode - read logins from WEASEL.INI or WEASEL.TNI.
 
+    debugCP( "Single domain mode" );
     pNewWCfg = hmalloc( sizeof(WCFG) );
 
-    if ( pNewWCfg != NULL )
+    if ( pNewWCfg == NULL )
+      debugCP( "Not enough memory" );
+    else
     {
       pNewWCfg->pszMailRoot = NULL;
       pNewWCfg->cDomains = 1;
@@ -462,14 +470,19 @@ ULONG _wcfgLoad(PSZ pszFile, ULONG ulINIType, PUTILFTIMESTAMP pFTimestamp,
 
     PSZ      pszDomains = _iniQueryNewString( &stINI, "$SYS", "Domains" );
 
-    if ( pszDomains != NULL )
+    debugCP( "Multi-domain mode" );
+    if ( pszDomains == NULL )
+      debugCP( "Cannot get $SYS/Domains value" );
+    else
     {
       for( pszScan = pszDomains, cDomains = 0; *pszScan != '\0';
            pszScan = strchr( pszScan, '\0' ) + 1, cDomains++ );
 
       pNewWCfg = hmalloc( ( sizeof(WCFG) - sizeof(PDOMAIN) ) +
                           ( cDomains * sizeof(PDOMAIN) ) );
-      if ( pNewWCfg != NULL )
+      if ( pNewWCfg == NULL )
+        debugCP( "Not enough memory" );
+      else
       {
         pNewWCfg->pszMailRoot = NULL;
         pNewWCfg->cDomains = 0;
@@ -513,6 +526,8 @@ ULONG _wcfgLoad(PSZ pszFile, ULONG ulINIType, PUTILFTIMESTAMP pFTimestamp,
       _iniQueryLong( &stINI, "$SYS", "SingleMatch", 0 ) != 0;
 
     pNewWCfg->pszMailRoot = hstrdup( acMailRool );
+    if ( pNewWCfg->pszMailRoot == NULL )
+      debugCP( "Not enough memory" );
     fSuccess = pNewWCfg->pszMailRoot != NULL;
   }
 
@@ -522,6 +537,7 @@ ULONG _wcfgLoad(PSZ pszFile, ULONG ulINIType, PUTILFTIMESTAMP pFTimestamp,
   {
     if ( pNewWCfg != NULL )
       _wcfgFree( pNewWCfg );
+    debugCP( "return _LOAD_FAIL" );
     return _LOAD_FAIL;
   }
 
@@ -664,8 +680,8 @@ BOOL wcfgUpdate(BOOL fIgnoreFTimeCheck)
   }
   else if ( fINIExist && fTNIExist )
   {
-/*    debug( "Both files (WEASEL.INI and WEASEL.TNI) exist - try first %s",
-           ulLastINIType == INITYPE_INI ? "INI" : "TNI" );*/
+//    debug( "Both files (WEASEL.INI and WEASEL.TNI) exist - try first %s",
+//           ulLastINIType == INITYPE_INI ? "INI" : "TNI" );
 
     if ( ulLastINIType == INITYPE_INI )
       ulRC = _wcfgLoad( acINIFile, INITYPE_INI, &stINITime, fIgnoreFTimeCheck,
@@ -677,8 +693,8 @@ BOOL wcfgUpdate(BOOL fIgnoreFTimeCheck)
     if ( ulRC == _LOAD_WANT_OTHER_TYPE )
     {
       ulLastINIType = ulLastINIType == INITYPE_INI ? INITYPE_TNI : INITYPE_INI;
-/*      debug( "Switch to %s...",
-             ulLastINIType == INITYPE_INI ? "INI" : "TNI" );*/
+      debug( "Switch to %s...",
+             ulLastINIType == INITYPE_INI ? "INI" : "TNI" );
 
       if ( ulLastINIType == INITYPE_INI )
         ulRC = _wcfgLoad( acINIFile, INITYPE_INI, &stINITime,
@@ -696,13 +712,13 @@ BOOL wcfgUpdate(BOOL fIgnoreFTimeCheck)
   }
   else if ( fINIExist )
   {
-//    debugCP( "Only file WEASEL.INI exist" );
+    debugCP( "Only file WEASEL.INI exist" );
     ulRC = _wcfgLoad( acINIFile, INITYPE_INI, &stINITime, fIgnoreFTimeCheck,
                       FALSE );
   }
   else if ( fTNIExist )
   {
-//    debugCP( "Only file WEASEL.TNI exist" );
+    debugCP( "Only file WEASEL.TNI exist" );
     ulRC = _wcfgLoad( acTNIFile, INITYPE_TNI, &stTNITime, fIgnoreFTimeCheck,
                       FALSE );
   }
@@ -722,8 +738,16 @@ LONG wcfgQueryMailRootDir(ULONG cbBuf, PCHAR pcBuf, PSZ pszSubPath)
 {
   LONG      cbMailRoot;
   ULONG     cbSubPath;
+  ULONG     ulRC;
 
-  DosRequestMutexSem( hmtxWCfg, SEM_INDEFINITE_WAIT );
+  ulRC = DosRequestMutexSem( hmtxWCfg, SEM_INDEFINITE_WAIT );
+//  ulRC = DosRequestMutexSem( hmtxWCfg, 2000 );
+  if ( ulRC != NO_ERROR )
+  {
+//logf( 1, "[EXT] wcfgQueryMailRootDir(): DosRequestMutexSem(hmtxWCfg,), rc = %u", ulRC );
+    debug( "DosRequestMutexSem(), rc = %u", ulRC );
+    return -1;
+  }
 
   if ( ( pWCfg == NULL ) || ( pWCfg->pszMailRoot == NULL ) )
   {
@@ -834,7 +858,10 @@ PWCFINDUSR wcfgFindUserBegin(PSZ pszUser, ULONG ulReqFlags)
 
   pFind = hmalloc( sizeof(WCFINDUSR) + strlen(pszUser) );
   if ( pFind == NULL )
+  {
+    debug( "Not enough high memory" );
     return NULL;
+  }
 
   strcpy( pFind->acUser, pszUser );
   pszDomain = strpbrk( pFind->acUser, "@%" );
@@ -856,8 +883,10 @@ PWCFINDUSR wcfgFindUserBegin(PSZ pszUser, ULONG ulReqFlags)
   pFind->ulReqFlags = ulReqFlags;
 
   ulRC = DosRequestMutexSem( hmtxWCfg, SEM_INDEFINITE_WAIT );
+//  ulRC = DosRequestMutexSem( hmtxWCfg, 2000 );
   if ( ulRC != NO_ERROR )
   {
+//logf( 1, "[EXT] wcfgFindUserBegin(): DosRequestMutexSem(hmtxWCfg,), rc = %u", ulRC );
     debug( "DosRequestMutexSem(), rc = %u", ulRC );
     hfree( pFind );
     return NULL;

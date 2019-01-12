@@ -31,7 +31,7 @@ extern ULONG cmdSearch(PUHSESS pUHSess, PCTX pCtx, BOOL fUID, PSZ pszLine);
 #define _AUTH_FAIL_RESP_DELAY    7000
 
 // Delay before "BAD" response (msec).
-#define _BAD_RESP_DELAY    2000
+#define _BAD_RESP_DELAY          2000
 
 // _MAX_BAD_COMMANDS
 // Client will be disconnected after _MAX_BAD_COMMANDS consecutive "BAD"
@@ -638,6 +638,7 @@ static BOOL _ctxAuthWrite(PCTX pCtx, LONG cbData, PCHAR pcData)
     fSuccess = ctxWriteStrLn( pCtx, "+" );
   else if ( utilB64Enc( cbData, pcData, &cbBuf, &pcBuf ) )
   {
+//    logf( 6, "Authentication ready response: %s", pcBuf );
     fSuccess = ctxWriteFmtLn( pCtx, "+ %s", pcBuf );
     free( pcBuf );
   }
@@ -710,7 +711,7 @@ static BOOL _authClientResponse(PCLNTDATA pClntData, ULONG cbData, PCHAR pcData)
   PSZ        pszUser;
   PSZ        pszMechanism;
 
-  // The pProtoData->_sd_pAuth->ulType value was detected in _cmdAuthenticate().
+  // The pProtoData->_sd_pAuth->ulType value was detected in cfnAuthenticate().
   switch( pProtoData->_sd_pAuth->ulType )
   {
     case _AUTH_PLAIN:            // PLAIN
@@ -761,6 +762,7 @@ static BOOL _authClientResponse(PCLNTDATA pClntData, ULONG cbData, PCHAR pcData)
         CHAR           acHexRef[(2 * EVP_MAX_MD_SIZE) + 1];
         int            cbRef;
         PWCFINDUSR     pFind;
+        PSZ            pszHomeDir = NULL;
 
         if ( !utilStrCutWord( (PSZ *)&pcData, &pszUser ) )
           break;
@@ -768,6 +770,7 @@ static BOOL _authClientResponse(PCLNTDATA pClntData, ULONG cbData, PCHAR pcData)
 
         // Look for users with username as pszUser.
 
+//        netsrvClntLog( pClntData, 6, "CRAM-MD5 for user %s, digest: %s", pszUser, pcData );
         pFind = wcfgFindUserBegin( pszUser,
                                    WC_USRFL_ACTIVE | WC_USRFL_USE_IMAP );
         if ( pFind == NULL )
@@ -778,6 +781,8 @@ static BOOL _authClientResponse(PCLNTDATA pClntData, ULONG cbData, PCHAR pcData)
 
         while( wcfgFindUser( pFind ) )
         {
+//          netsrvClntLog( pClntData, 6, "User found" );
+
           // Create a reference hash for found user.
           pcRef = HMAC( EVP_md5(),
                         pFind->pszPassword, strlen( pFind->pszPassword ),
@@ -786,6 +791,7 @@ static BOOL _authClientResponse(PCLNTDATA pClntData, ULONG cbData, PCHAR pcData)
           if ( pcRef == NULL )
           {
             debugCP( "WTF?" );
+            netsrvClntLog( pClntData, 0, "Could not create a CRAM-MD5 reference hash for user" );
             continue;
           }
 
@@ -797,23 +803,45 @@ static BOOL _authClientResponse(PCLNTDATA pClntData, ULONG cbData, PCHAR pcData)
           // Compare reference with user's digest.
           if ( strcmp( pcData, acHexRef ) == 0 )
           {
-            if ( fsSessOpen( &pProtoData->stUHSess, pFind->acHomeDir ) )
-            {
-              pProtoData->ulState = _STATE_AUTHENTICATED;
-              pProtoData->usBadLogins = 0;
-              ulResp = IMAPR_OK_COMPLETED;
-            }
-
+            // Ok, user is found and authenticated.
+            // We will open session AFTER wcfgFindUserEnd() to avoid deadlock:
+            // mutex in wcfg module (hmtxWCfg) and mutex in imapfs (hmtxHome).
+            pszHomeDir = strdup( pFind->acHomeDir );
             break;            
           }
+/*          else
+            netsrvClntLog( pClntData, 6,
+                           "Failed to compare reference with user's digest. "
+                           "User: %s, domain: %s",
+                           pszUser, pFind->pszDomainName );*/
         }
 
+//        netsrvClntLog( pClntData, 6, "CRAM-MD5 - end" );
         wcfgFindUserEnd( pFind );
+
+        if ( pszHomeDir != NULL )
+        {
+          if ( fsSessOpen( &pProtoData->stUHSess, pszHomeDir ) )
+          {
+            pProtoData->ulState = _STATE_AUTHENTICATED;
+            pProtoData->usBadLogins = 0;
+            ulResp = IMAPR_OK_COMPLETED;
+//            netsrvClntLog( pClntData, 6, "Authenticated, session is open" );
+          }
+          else
+            netsrvClntLog( pClntData, 0, "Could not open user session" );
+
+          free( pszHomeDir );
+        }
+/*        else
+          netsrvClntLog( pClntData, 6, "User not found" );*/
       }
       break;
 
     default:
       debugCP( "WTF?!" );
+      netsrvClntLog( pClntData, 0,
+                     "Internal error - unknown authentication mechanism" );
       return FALSE;
   }
 
@@ -875,7 +903,7 @@ static ULONG cfnCapability(PCLNTDATA pClntData, PPROTODATA pProtoData, PCTX pCtx
 
   netsrvClntLog( pClntData, 6, acBuf );
 
-  strcat( acBuf, "\r\n" );       // CR LF
+  strcat( acBuf, "\r\n" );       // CRLF
 
   ctxWrite( pCtx, -1, acBuf );
 
@@ -951,6 +979,7 @@ static ULONG cfnAuthenticate(PCLNTDATA pClntData, PPROTODATA pProtoData,
   switch( lMethod )
   {
     case -1: // Unknown method.
+      netsrvClntLog( pClntData, 6, "Unknown authentication mechanism" );
       return IMAPR_NO_FAILURE;
 
     case 0:  // _AUTH_PLAIN
@@ -983,9 +1012,13 @@ static ULONG cfnAuthenticate(PCLNTDATA pClntData, PPROTODATA pProtoData,
         cb = imfGenerateMsgId( sizeof(pAuth->acChallenge), pAuth->acChallenge,
                                NULL );
         if ( cb == -1 )
+        {
           hfree( pAuth );
+          netsrvClntLog( pClntData, 0, "Could not generate challenge" );
+        }
         else
         {
+//          netsrvClntLog( pClntData, 6, "Challenge: %s", pAuth->acChallenge );
           pAuth->cbChallenge = cb;
           _ctxAuthWrite( pCtx, pAuth->cbChallenge, pAuth->acChallenge );
           pProtoData->_sd_pAuth = (PAUTH)pAuth;
@@ -995,7 +1028,10 @@ static ULONG cfnAuthenticate(PCLNTDATA pClntData, PPROTODATA pProtoData,
   }
 
   if ( pProtoData->_sd_pAuth == NULL )
+  {
+    netsrvClntLog( pClntData, 0, "Internal error during authorization" );
     return IMAPR_NO_INTERNAL_ERROR;
+  }
 
   pProtoData->_sd_pAuth->ulType = lMethod;
   strlcpy( pProtoData->_sd_pAuth->acCmdId, pCmdData->acId,
@@ -1230,6 +1266,7 @@ static ULONG cfnStatus(PCLNTDATA pClntData, PPROTODATA pProtoData, PCTX pCtx)
   ctxWrite( pCtx, -1, "* STATUS " );
   _ctxWritePath( pCtx, pCmdData->apArg[0], FALSE );
   ctxWriteFmtLn( pCtx, " (%s)", acBuf );
+  netsrvClntLog( pClntData, 6, "* STATUS %s (%s)", pCmdData->apArg[0], acBuf );
 
   return IMAPR_OK_COMPLETED;
 }

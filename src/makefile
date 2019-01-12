@@ -3,7 +3,7 @@
 #
 
 NAME         = imapd
-VERSION      = 0.1.5
+VERSION      = 0.1.9
 DESCRIPTION  = IMAP4 service for the Weasel mail server
 AUTOR        = Andrey Vasilkin
 

@@ -336,8 +336,7 @@ Full commands list for the control protocol:
 
 ---
 Donations are most welcome!
-https://www.arcanoae.com/shop/os2-ports-and-applications-by-andrey-vasilkin/
 PayPal: digi@os2.snc.ru
 
-Andrey Vasilkin, 2017
+Andrey Vasilkin, 2017-2018
 E-mail: digi@os2.snc.ru

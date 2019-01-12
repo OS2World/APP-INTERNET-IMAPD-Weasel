@@ -41,9 +41,9 @@
 
 // fsQueryMailbox(,,ulOp,)
 
-// FSGMB_SELECT  - Select mailbos for the session.
+// FSGMB_SELECT  - Select mailbox for the session.
 #define FSGMB_SELECT             0
-// FSGMB_EXAMINE - Select mailbos for the session in read-only mose
+// FSGMB_EXAMINE - Select mailbox for the session in read-only mode
 #define FSGMB_EXAMINE            1
 // FSGMB_STATUS  - Obtain status of mailbox, do not select.
 #define FSGMB_STATUS             2
