@@ -172,7 +172,7 @@ typedef struct _FSCHANGES {
 } FSCHANGES, *PFSCHANGES;
 
 #define fsReleaseChanges(__pChanges) do { \
-  if ( (__pChanges)->pChgMsg != NULL ) hfree( (__pChanges)->pChgMsg ); \
+  if ( (__pChanges)->pChgMsg != NULL ) free( (__pChanges)->pChgMsg ); \
 } while( 0 )
 
 // Input data for fsAppend()

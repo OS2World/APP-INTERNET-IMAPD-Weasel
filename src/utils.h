@@ -243,9 +243,6 @@ VOID utilB64DecChunk(PB64DEC pB64Dec, PULONG pcbDst, PCHAR *ppcDst,
                      PULONG pcbSrc, PCHAR *ppcSrc);
 
 
-// BOOL utilQueryFileDateTime(PSZ pszFile, PFTIMESTAMP pFTimestamp)
-// Queries file date/time. When an error has occurred function returns FALSE.
-
 #pragma pack(1)
 typedef struct _FTIMESTAMP {
   FDATE      fdateLastWrite;

@@ -7,6 +7,11 @@
 
 #define CTX_ALL        ULONG_MAX
 
+// ctxSetReadPos(,ulOrigin,)
+#define CTX_RPO_BEGIN    0
+#define CTX_RPO_CURRENT  1
+#define CTX_RPO_END      2
+
 typedef struct _CTX    *PCTX;
 typedef LONG (*PCTXWRITEFILTER)(ULONG cbBuf, PVOID pBuf, PVOID pData);
 
@@ -23,7 +28,10 @@ BOOL ctxWrite(PCTX pCtx, LONG cbData, PVOID pData);
 ULONG ctxRead(PCTX pCtx, ULONG cbData, PVOID pData, BOOL fPeek);
 
 ULLONG ctxQuerySize(PCTX pCtx);
-BOOL ctxSetReadPos(PCTX pCtx, ULLONG ullPos);
+ULLONG ctxQueryAvailForRead(PCTX pCtx);
+
+// ulOrigin - CTX_RPO_xxxxx
+BOOL ctxSetReadPos(PCTX pCtx, ULONG ulOrigin, LLONG llPos);
 #if 0
 // deprecated
 BOOL ctxTruncate(PCTX pCtx, LLONG llNewSize);
@@ -40,7 +48,9 @@ PCTX ctxNewFromTemplate(LONG cbText, PCHAR pcText,
                         BOOL (*fnSubset)(PCTX pCtx, ULONG cbKey, PSZ pszKey,
                                          PVOID pData),
                         PVOID pData);
-BOOL ctxFileWrite(PCTX pCtx, HFILE hFile);
-BOOL ctxFileRead(PCTX pCtx, HFILE hFile);
+
+// Returns system API error code (DOS Error value).
+ULONG ctxFileWrite(PCTX pCtx, HFILE hFile);
+ULONG ctxFileRead(PCTX pCtx, HFILE hFile);
 
 #endif // CONTEXT_H

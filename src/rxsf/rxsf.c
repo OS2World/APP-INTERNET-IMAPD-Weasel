@@ -15,7 +15,7 @@
 #include <sys\socket.h>
 #include <unistd.h>
 #include <sys\un.h>
-#include <utils.h>
+//#include <util.h>
 #include <debug.h>
 
 #define INVALID_ROUTINE		40           /* Raise Rexx error           */
@@ -51,6 +51,84 @@ static PSZ RxFncTable[] =
   (PSZ)"rxsfRecv",
   (PSZ)"rxsfRequest"
 };
+
+
+#define ARRAY_SIZE(a) ( sizeof(a) / sizeof(a[0]) )
+
+#define BUF_SKIP_SPACES(cb, pc) \
+  while( (cb > 0) && isspace( *pc ) ) { cb--; pc++; }
+
+#define BUF_MOVE_TO_SPACE(cb, pc) \
+  while( (cb > 0) && !isspace( *pc ) ) { cb--; pc++; }
+
+#define BUF_RTRIM(cb, pc) \
+  while( (cb > 0) && ( isspace( pc[cb - 1] ) ) ) cb--
+
+// utilStrCutWord(PULONG pcbText, PCHAR *ppcText,
+//                PULONG pcbWord, PCHAR *ppcWord)
+//
+// Locates first word from the string *ppcText (length *pcbText) and places
+// pointer to the finded word to ppcWord and length of this word in pcbWord.
+// On return *pcbText contains pointer to the first character after founded
+// word and *ppcText left length of the text.
+// *pcbWord == 0 when no more words in the input text.
+
+BOOL utilStrCutWord(PULONG pcbText, PCHAR *ppcText,
+                    PULONG pcbWord, PCHAR *ppcWord)
+{
+  ULONG            cbText = *pcbText;
+  PCHAR            pcText = *ppcText;
+  PCHAR            pcWord;
+
+  BUF_SKIP_SPACES( cbText, pcText );
+  pcWord = pcText;
+  BUF_MOVE_TO_SPACE( cbText, pcText );
+
+  *pcbText = cbText;
+  *ppcText = pcText;
+  *pcbWord = pcText - pcWord;
+  *ppcWord = pcWord;
+
+  return pcText != pcWord;
+}
+
+// LONG utilStrWordIndex(PSZ pszList, PCHAR pcWord, ULONG cbWord)
+//
+// Returns index of word pointed by pcWord (and length equals cbWord) in the
+// list pszList. The list must contain the words separated by a space.
+// The function returns -1 if the word is not found.
+
+LONG utilStrWordIndex(PSZ pszList, ULONG cbWord, PCHAR pcWord)
+{
+  ULONG		   ulIdx;
+  ULONG      cbList;
+  ULONG      cbScanWord;
+  PCHAR      pcScanWord;
+
+  if ( pcWord == NULL || cbWord == 0 )
+    return -1;
+
+  BUF_SKIP_SPACES( cbWord, pcWord );
+  BUF_RTRIM( cbWord, pcWord );
+  if ( cbWord == 0 )
+    return -1;
+
+  cbList = strlen( pszList );
+  for( ulIdx = 0; ; ulIdx++ )
+  {
+    utilStrCutWord( &cbList, (PCHAR *)&pszList, &cbScanWord, &pcScanWord );
+    if ( cbScanWord == 0 )
+      // All words in the list was checked.
+      break;
+
+    if ( ( cbScanWord == cbWord ) &&
+         ( memicmp( pcScanWord, pcWord, cbScanWord ) == 0 ) )
+      // Word found - return list index of word.
+      return ulIdx;
+  }
+
+  return -1;
+}
 
 
 static BOOL _rxstrtoi(RXSTRING rxsValue, int *piValue)
@@ -125,7 +203,7 @@ ULONG rxsfLoadFuncs(PUCHAR puchName, ULONG cArgs, RXSTRING aArgs[],
   if ( cArgs > 0 )
     return INVALID_ROUTINE;
  
-  for( ulIdx = 0; ulIdx < ARRAYSIZE(RxFncTable); ulIdx++ )
+  for( ulIdx = 0; ulIdx < ARRAY_SIZE(RxFncTable); ulIdx++ )
     RexxRegisterFunctionDll( RxFncTable[ulIdx], "RXSF", RxFncTable[ulIdx] );
 
   debugInit();
@@ -141,7 +219,7 @@ ULONG rxsfDropFuncs(PUCHAR puchName, ULONG cArgs, RXSTRING aArgs[],
   if ( cArgs > 0 )
     return INVALID_ROUTINE;
  
-  for( ulIdx = 0; ulIdx < ARRAYSIZE(RxFncTable); ulIdx++ )
+  for( ulIdx = 0; ulIdx < ARRAY_SIZE(RxFncTable); ulIdx++ )
     RexxDeregisterFunction( RxFncTable[ulIdx] );
 
   debug( "Done. Allocated memory: %d", debugMemUsed() );
@@ -207,7 +285,7 @@ ULONG rxsfSend(PUCHAR puchName, ULONG cArgs, RXSTRING aArgs[],
     ULONG    cbFlag;
     PCHAR    pcFlag;
 
-    while( utilBufCutWord( &cbFlags, &pcFlags, &cbFlag, &pcFlag ) )
+    while( utilStrCutWord( &cbFlags, &pcFlags, &cbFlag, &pcFlag ) )
     {
       switch( utilStrWordIndex( "MSG_DONTROUTE MSG_DONTWAIT MSG_OOB", cbFlag,
                                 pcFlag ) )
@@ -263,7 +341,7 @@ ULONG rxsfRecv(PUCHAR puchName, ULONG cArgs, RXSTRING aArgs[],
     ULONG    cbFlag;
     PCHAR    pcFlag;
 
-    while( utilBufCutWord( &cbFlags, &pcFlags, &cbFlag, &pcFlag ) )
+    while( utilStrCutWord( &cbFlags, &pcFlags, &cbFlag, &pcFlag ) )
     {
       switch( utilStrWordIndex( "MSG_DONTWAIT MSG_OOB MSG_PEEK MSG_WAITALL",
                                 cbFlag, pcFlag ) )

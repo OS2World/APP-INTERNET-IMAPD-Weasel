@@ -17,7 +17,7 @@
 #include <sys\socket.h>
 #include <unistd.h>
 
-#include <hmem.h>
+//#include <hmem.h>
 
 #define INCL_DOSSEMAPHORES
 #include <os2.h>
@@ -348,6 +348,7 @@ char *debug_strdup(const char *src, char *pcFile, int iLine)
 }
 
 
+/*
 void *debug_hmalloc(size_t size, char *pcFile, int iLine)
 {
   void       *pBlock = hmalloc( sizeof(MEMBLKHDR) + size );
@@ -447,7 +448,7 @@ char *debug_hstrdup(const char *src, char *pcFile, int iLine)
 
   return dst;
 }
-
+*/
 
 int debug_socket(int domain, int type, int protocol)
 {

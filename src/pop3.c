@@ -20,7 +20,6 @@
 #include "message.h"
 #include "wcfg.h"
 #include "log.h"
-#include "hmem.h"
 #include "netserv.h"
 #include "imapfs.h"
 #include "pop3.h"
@@ -224,7 +223,7 @@ static BOOL pop3New(PCLNTDATA pClntData)
     return FALSE;
 
   if ( acBuf[0] != '\0' )
-    pProtoData->_sd_pszTimestamp = hstrdup( acBuf );
+    pProtoData->_sd_pszTimestamp = strdup( acBuf );
 
   return TRUE;
 }
@@ -262,7 +261,7 @@ static VOID pop3Destroy(PCLNTDATA pClntData)
                            pFileInfo->acHash );
       }
 
-      hfree( pFileInfo );
+      free( pFileInfo );
       _setFInfo( ulIdx, NULL );
     }
   }
@@ -291,13 +290,13 @@ static VOID _destroyStateData(PPROTODATA pProtoData)
     case _STATE_AUTHORIZATION: 
       if ( pProtoData->_sd_pszTimestamp != NULL )
       {
-        hfree( pProtoData->_sd_pszTimestamp );
+        free( pProtoData->_sd_pszTimestamp );
         pProtoData->_sd_pszTimestamp = NULL;
       }
 
       if ( pProtoData->_sd_pszUser != NULL )
       {
-        hfree( pProtoData->_sd_pszUser );
+        free( pProtoData->_sd_pszUser );
         pProtoData->_sd_pszUser = NULL;
       }
 
@@ -309,14 +308,14 @@ static VOID _destroyStateData(PPROTODATA pProtoData)
       {
         pFileInfo = _getFInfo( ulIdx );
         if ( pFileInfo != NULL )
-          hfree( pFileInfo );
+          free( pFileInfo );
       }
       msListDestroy( &pProtoData->_sd_stFList );
 
       if ( pProtoData->_sd_pszShortPath != NULL )
       {
         pop3Lock( pProtoData->_sd_pszShortPath, FALSE );
-        hfree( pProtoData->_sd_pszShortPath );
+        free( pProtoData->_sd_pszShortPath );
       }
 
       break;
@@ -421,7 +420,7 @@ static ULONG _clntAuthenticated(PCLNTDATA pClntData, PSZ pszShortPath,
     return POP3R_ERR_INTERNAL_ERROR;
   }
 
-  pProtoData->_sd_pszShortPath = hstrdup( pszShortPath );
+  pProtoData->_sd_pszShortPath = strdup( pszShortPath );
   if ( pProtoData->_sd_pszShortPath == NULL )
   {
     pop3Lock( pszShortPath, FALSE );
@@ -432,7 +431,7 @@ static ULONG _clntAuthenticated(PCLNTDATA pClntData, PSZ pszShortPath,
   // Set information data for the each file record.
   for( lIdx = pProtoData->_sd_stFList.ulCount - 1; lIdx >= 0; lIdx-- )
   {
-    pFileInfo = hmalloc( sizeof(POP3FILEINFO) );
+    pFileInfo = malloc( sizeof(POP3FILEINFO) );
     if ( pFileInfo == NULL )
     {
       msListRemoveIdx( &pProtoData->_sd_stFList, lIdx );
@@ -651,7 +650,7 @@ static BOOL cfnQUIT(PCLNTDATA pClntData, PSZ pszArgLine, PCTX pCtx)
 
     // We will collect records of deleted messages to stDelList list.
     stDelList.ulCount = 0;
-    stDelList.papFiles = hmalloc( pProtoData->_sd_stFList.ulCount *
+    stDelList.papFiles = malloc( pProtoData->_sd_stFList.ulCount *
                                   sizeof(PMSFILE) );
     if ( stDelList.papFiles != NULL )
     {
@@ -664,7 +663,7 @@ static BOOL cfnQUIT(PCLNTDATA pClntData, PSZ pszArgLine, PCTX pCtx)
           continue;
 
         // Destroy PPOP3FILEINFO object.
-        hfree( pFileInfo );
+        free( pFileInfo );
         _setFInfo( lIdx, NULL );
 
         // Move record to the temporary list.
@@ -743,9 +742,9 @@ static BOOL cfnUSER(PCLNTDATA pClntData, PSZ pszArgLine, PCTX pCtx)
   else
   {
     if ( pProtoData->_sd_pszUser != NULL )
-      hfree( pProtoData->_sd_pszUser );
+      free( pProtoData->_sd_pszUser );
 
-    pProtoData->_sd_pszUser = hstrdup( pszUser );
+    pProtoData->_sd_pszUser = strdup( pszUser );
     if ( pProtoData->_sd_pszUser == NULL )
       return FALSE;
 
@@ -877,11 +876,11 @@ static BOOL cfnAUTH(PCLNTDATA pClntData, PSZ pszArgLine, PCTX pCtx)
 
         cbTimestamp = imfGenerateMsgId( sizeof(acBuf), acBuf, NULL );
         if ( ( cbTimestamp == -1 ) ||
-             ( (pszTimestamp = hstrdup( acBuf )) == NULL ) )
+             ( (pszTimestamp = strdup( acBuf )) == NULL ) )
           return _clntResp( pClntData, POP3R_ERR_INTERNAL_ERROR );
 
         if ( pProtoData->_sd_pszTimestamp != NULL )
-          hfree( pProtoData->_sd_pszTimestamp );
+          free( pProtoData->_sd_pszTimestamp );
         pProtoData->_sd_pszTimestamp = pszTimestamp;
         
         if ( !utilB64Enc( cbTimestamp, pszTimestamp, &cbBuf, &pcBuf ) )
@@ -1228,9 +1227,9 @@ VOID pop3Done()
   {
     for( ulIdx = 0; ulIdx < cLockList; ulIdx++ )
       if ( ppLockList[ulIdx] != NULL )
-        hfree( ppLockList[ulIdx] );
+        free( ppLockList[ulIdx] );
 
-    hfree( ppLockList );
+    free( ppLockList );
   }
 }
 
@@ -1299,7 +1298,7 @@ BOOL pop3Lock(PSZ pszHomePath, BOOL fLock)
         }
       }
 
-      pHomeLock = hmalloc( sizeof(HOMELOCK) + strlen( pszHomePath ) );
+      pHomeLock = malloc( sizeof(HOMELOCK) + strlen( pszHomePath ) );
       if ( pHomeLock == NULL )
         break;
       strcpy( pHomeLock->acPath, pszHomePath );
@@ -1307,7 +1306,7 @@ BOOL pop3Lock(PSZ pszHomePath, BOOL fLock)
 
       if ( cLockList == ulLockListMax )
       {
-        PHOMELOCK      *ppNew = hrealloc( ppLockList,
+        PHOMELOCK      *ppNew = realloc( ppLockList,
                                           (cLockList+8) * sizeof(PHOMELOCK) );
 
         if ( ppNew == NULL )
@@ -1315,7 +1314,7 @@ BOOL pop3Lock(PSZ pszHomePath, BOOL fLock)
           if ( fLockFile )
             DosDelete( acLockFile );
 
-          hfree( pHomeLock );
+          free( pHomeLock );
           fRes = FALSE;
           break;
         }
@@ -1334,7 +1333,7 @@ BOOL pop3Lock(PSZ pszHomePath, BOOL fLock)
         DosDelete( acLockFile );
 
       cLockList--;
-      hfree( ppLockList[ulIdx] );
+      free( ppLockList[ulIdx] );
       ppLockList[ulIdx] = ppLockList[cLockList];
     }
   }

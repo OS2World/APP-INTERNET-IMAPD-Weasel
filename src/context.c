@@ -1,7 +1,7 @@
 /*
-  Context is an object to store sequential data (like disk file). It have
-  read position and can occupy the high memory and external temporary files.
-  First it attempts to use the high memory.
+    Context is an object to store sequential data (like disk file). It have
+    read position and can occupy the high memory and external temporary files.
+    First it attempts to use the high memory.
 */
 
 #include <stdlib.h>
@@ -12,7 +12,6 @@
 #define INCL_DOSERRORS
 #include <os2.h>
 #include "context.h"
-#include "hmem.h"
 #include "debug.h"               // Should be last.
 
 // Size of memory block.
@@ -49,7 +48,7 @@ typedef struct _CTX {
 
 PCTX ctxNew()
 {
-  PCTX       pCtx = hcalloc( 1, sizeof(CTX) );
+  PCTX       pCtx = calloc( 1, sizeof(CTX) );
 
   return pCtx;
 }
@@ -62,10 +61,10 @@ VOID ctxFree(PCTX pCtx)
   while( pCtx->cCtxBuf > 0 )
   {
     pCtx->cCtxBuf--;
-    hfree( pCtx->papCtxBuf[pCtx->cCtxBuf] );
+    free( pCtx->papCtxBuf[pCtx->cCtxBuf] );
   }
   if ( pCtx->papCtxBuf != NULL )
-    hfree( pCtx->papCtxBuf );
+    free( pCtx->papCtxBuf );
 
   if ( pCtx->hFile != NULLHANDLE )
   {
@@ -79,7 +78,7 @@ VOID ctxFree(PCTX pCtx)
     free( pCtx->pszFile );
   }
 
-  hfree( pCtx );
+  free( pCtx );
 }
 
 VOID ctxSetWriteFilter(PCTX pCtx, PCTXWRITEFILTER pfnFilter, PVOID pFilterData)
@@ -122,7 +121,7 @@ BOOL ctxWrite(PCTX pCtx, LONG cbData, PVOID pData)
   if ( cbData == 0 )
     return TRUE;
 
-  // Store data to the high memory blocks.
+  // Store data to the memory blocks.
 
   if ( (pCtx->ulFlags & _FL_FILE) == 0 )
   do
@@ -136,16 +135,16 @@ BOOL ctxWrite(PCTX pCtx, LONG cbData, PVOID pData)
     else if ( pCtx->cCtxBuf < _CTX_BUF_MAX_NUM )
     {
       // Add a new block.
-      pcCtxBuf = hmalloc( _CTX_BUF_SIZE );
+      pcCtxBuf = malloc( _CTX_BUF_SIZE );
 
       if ( pcCtxBuf != NULL )
       {
-        PCHAR  *papNewList = hrealloc( pCtx->papCtxBuf,
+        PCHAR  *papNewList = realloc( pCtx->papCtxBuf,
                                      ( pCtx->cCtxBuf + 1 ) * sizeof(PCHAR *) );
 
         if ( papNewList == NULL )
         {
-          hfree( pcCtxBuf );
+          free( pcCtxBuf );
           pcCtxBuf = NULL;
         }
         else
@@ -269,7 +268,7 @@ ULONG ctxRead(PCTX pCtx, ULONG cbData, PVOID pData, BOOL fPeek)
   if ( fPeek && ( pData == NULL ) )
     return cbData;
 
-  // Read from context high memory buffers.
+  // Read from context memory buffers.
 
   cbTotalCtxBuf = pCtx->cCtxBuf * _CTX_BUF_SIZE;
   if ( cbTotalCtxBuf > pCtx->ullWritePos )
@@ -332,15 +331,38 @@ ULONG ctxRead(PCTX pCtx, ULONG cbData, PVOID pData, BOOL fPeek)
 
 ULLONG ctxQuerySize(PCTX pCtx)
 {
+  if ( pCtx == NULL )
+  {
+    debugCP( "Argument is NULL" );
+    return 0;
+  }
+
   return pCtx->ullWritePos;
 }
 
-BOOL ctxSetReadPos(PCTX pCtx, ULLONG ullPos)
+ULLONG ctxQueryAvailForRead(PCTX pCtx)
 {
-  if ( ullPos > pCtx->ullWritePos )
+  if ( pCtx == NULL )
+  {
+    debugCP( "Argument is NULL" );
+    return 0;
+  }
+
+  return pCtx->ullWritePos - pCtx->ullReadPos;
+}
+
+BOOL ctxSetReadPos(PCTX pCtx, ULONG ulOrigin, LLONG llPos)
+{
+  if ( ulOrigin == CTX_RPO_CURRENT )
+    llPos += pCtx->ullReadPos;
+  else if ( ulOrigin == CTX_RPO_END )
+    llPos += pCtx->ullWritePos;
+  // else is ulOrigin == CTX_RPO_BEGIN
+
+  if ( llPos > pCtx->ullWritePos )
     pCtx->ullReadPos = pCtx->ullWritePos;
   else
-    pCtx->ullReadPos = ullPos;
+    pCtx->ullReadPos = (ULLONG)llPos;
 
   return TRUE;
 }
@@ -399,11 +421,11 @@ BOOL ctxTruncate(PCTX pCtx, LLONG llNewSize)
   while( pCtx->cCtxBuf > cCtxBuf )
   {
     pCtx->cCtxBuf--;
-    hfree( pCtx->papCtxBuf[pCtx->cCtxBuf] );
+    free( pCtx->papCtxBuf[pCtx->cCtxBuf] );
   }
 
   // Collapse list of buffers.
-  papNewList = hrealloc( pCtx->papCtxBuf, pCtx->cCtxBuf * sizeof(PCHAR *) );
+  papNewList = realloc( pCtx->papCtxBuf, pCtx->cCtxBuf * sizeof(PCHAR *) );
   if ( papNewList != NULL )
     pCtx->papCtxBuf = papNewList;
 
@@ -613,10 +635,10 @@ PCTX ctxNewFromTemplate(LONG cbText, PCHAR pcText,
   return pCtx;
 }
 
-BOOL ctxFileWrite(PCTX pCtx, HFILE hFile)
+ULONG ctxFileWrite(PCTX pCtx, HFILE hFile)
 {
   PCHAR      pcBuf;
-  ULONG      ulActual;
+  ULONG      cbBuf, ulActual;
   ULONG      ulRC;
 
   ulRC = DosAllocMem( (PVOID *)&pcBuf, _FILE_IO_BUF_SIZE,
@@ -624,25 +646,33 @@ BOOL ctxFileWrite(PCTX pCtx, HFILE hFile)
   if ( ulRC != NO_ERROR )
   {
     debug( "DosAllocMem(), rc = %u", ulRC );
-    return FALSE;
+    return ulRC;
   }
 
-  ctxSetReadPos( pCtx, 0 );
   do
-    ulRC = DosWrite( hFile, pcBuf,
-                     ctxRead( pCtx, _FILE_IO_BUF_SIZE, pcBuf, FALSE ),
-                     &ulActual );
-  while( ( ulRC == NO_ERROR ) && ( ulActual == _FILE_IO_BUF_SIZE ) );
+  {
+    cbBuf = ctxRead( pCtx, _FILE_IO_BUF_SIZE, pcBuf, TRUE );
+    if ( cbBuf == 0 )
+      break;
+
+    ulRC = DosWrite( hFile, pcBuf, cbBuf, &ulActual );
+    if ( ulRC != NO_ERROR )
+    {
+      debug( "DosWrite(), rc = %lu", ulRC );
+      break;
+    }
+
+    if ( !ctxSetReadPos( pCtx, CTX_RPO_CURRENT, ulActual ) )
+      debugCP( "ctxSetReadPos() failed" );
+  }
+  while( ulActual == cbBuf );
 
   DosFreeMem( pcBuf );
 
-  if ( ulRC != NO_ERROR )
-    debug( "DosWrite(), rc = %lu", ulRC );
-
-  return ulRC == NO_ERROR;
+  return ulRC;
 }
 
-BOOL ctxFileRead(PCTX pCtx, HFILE hFile)
+ULONG ctxFileRead(PCTX pCtx, HFILE hFile)
 {
   PCHAR      pcBuf;
   ULONG      ulActual;
@@ -653,7 +683,7 @@ BOOL ctxFileRead(PCTX pCtx, HFILE hFile)
   if ( ulRC != NO_ERROR )
   {
     debug( "DosAllocMem(), rc = %u", ulRC );
-    return FALSE;
+    return ulRC;
   }
 
   do
@@ -671,5 +701,5 @@ BOOL ctxFileRead(PCTX pCtx, HFILE hFile)
   if ( ulRC != NO_ERROR )
     debug( "DosWrite(), rc = %lu", ulRC );
 
-  return ulRC == NO_ERROR;
+  return ulRC;
 }

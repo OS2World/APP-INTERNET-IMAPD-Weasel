@@ -1633,6 +1633,19 @@ BOOL utilQueryFileInfo(PSZ pszFile, PUTILFTIMESTAMP pFTimestamp,
 }
 
 
+/*
+  ULONG utilOpenTempFile(ULONG cbPath, PCHAR pcPath, ULLONG ullSize,
+                         ULONG cbFullName, PCHAR pcFullName, PHFILE phFile)
+
+  Creates (opens) a new file with a unique name.
+  cbPath/pcPath         - IN, path where the file will be created.
+  ullSize               - IN, size that will be set for the created file.
+  cbFullName/pcFullName - OUT, full name of the file that was created.
+  phFile                - OUT, file system handler.
+
+  Returns DOS API error code.
+*/
+
 #define _RND_FNAME_LEN           6
 #define _RND_FNAME_ITERATIONS    1000
 

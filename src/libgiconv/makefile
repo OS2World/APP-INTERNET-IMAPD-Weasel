@@ -11,9 +11,11 @@
 LIBFILE = libgiconv.a
 CC = @gcc
 
+CFLAGS = -I.
+
 all: $(LIBFILE)
 # all: $(LIBFILE) test.exe
-# CFLAGS = -DDEBUG
+#CFLAGS = -DDEBUG
 
 SRCS = geniconv.c os2cp.c os2iconv.c
 # SRCS+= sys2utf8.c

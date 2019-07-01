@@ -21,7 +21,6 @@
 #include "message.h"
 #include "wcfg.h"
 #include "log.h"
-#include "hmem.h"
 #include "imap.h"
 #include "debug.h"               // Should be last.
 
@@ -333,7 +332,7 @@ static VOID imapDestroy(PCLNTDATA pClntData)
     _authDestroy( pProtoData );
   }
   else if ( pProtoData->_sd_pszIdleCmdId != NULL )
-    hfree( pProtoData->_sd_pszIdleCmdId );
+    free( pProtoData->_sd_pszIdleCmdId );
 
   // Destroy user-home session.
   fsSessDone( &pProtoData->stUHSess );
@@ -355,10 +354,10 @@ static VOID imapDestroy(PCLNTDATA pClntData)
 static VOID __bcFree(PBODYCACHE pBodyCache)
 {
   if ( pBodyCache->pszFields != NULL )
-    hfree( pBodyCache->pszFields );
+    free( pBodyCache->pszFields );
 
   ctxFree( pBodyCache->pCtx );
-  hfree( pBodyCache );
+  free( pBodyCache );
 }
 
 static PCTX _bcGet(PPROTODATA pProtoData, ULONG ulUID, PIMFBODYPARAM pBody)
@@ -392,7 +391,7 @@ static PCTX _bcGet(PPROTODATA pProtoData, ULONG ulUID, PIMFBODYPARAM pBody)
            ( pBody->ullLength >= cbCtx ) )
         pBody->ullLength = cbCtx;
 
-      ctxSetReadPos( pCtx, pBody->ullStart );
+      ctxSetReadPos( pCtx, CTX_RPO_BEGIN, pBody->ullStart );
 
       return pCtx;
     } // if
@@ -417,7 +416,7 @@ static BOOL _bcPut(PPROTODATA pProtoData, ULONG ulUID, PIMFBODYPARAM pBody,
     __bcFree( pBodyCache );
   }
 
-  pBodyCache = hmalloc( sizeof(BODYCACHE) - sizeof(ULONG) +
+  pBodyCache = malloc( sizeof(BODYCACHE) - sizeof(ULONG) +
                         ( pBody->cPart * sizeof(ULONG) ) );
   if ( pBodyCache == NULL )
     return FALSE;
@@ -428,7 +427,7 @@ static BOOL _bcPut(PPROTODATA pProtoData, ULONG ulUID, PIMFBODYPARAM pBody,
 
   if ( ( (pBody->ulFlags & IMFFL_HEADER) != NULL ) &&
        ( pBody->pszFields != NULL ) )
-    pBodyCache->pszFields = hstrdup( pBody->pszFields );
+    pBodyCache->pszFields = strdup( pBody->pszFields );
   else
     pBodyCache->pszFields = NULL;
 
@@ -655,7 +654,7 @@ static VOID _authDestroy(PPROTODATA pProtoData)
 
   // <-- Destroy pProtoData->_sd_pAuth object's data. -->
 
-  hfree( pProtoData->_sd_pAuth );
+  free( pProtoData->_sd_pAuth );
   pProtoData->_sd_pAuth = NULL;
 }
 
@@ -877,7 +876,7 @@ static VOID _cmdDataFree(PPROTODATA pProtoData)
   if ( pCmdData->pLitCtx != NULL )
     ctxFree( pCmdData->pLitCtx );
 
-  hfree( pCmdData );
+  free( pCmdData );
   pProtoData->pCmdData = NULL;
 }
 
@@ -988,7 +987,7 @@ static ULONG cfnAuthenticate(PCLNTDATA pClntData, PPROTODATA pProtoData,
           // Plain logins on unencrypted connection are forbidden.
           return IMAPR_BAD_INVALID_STATE;
 
-        pProtoData->_sd_pAuth = (PAUTH)hmalloc( sizeof(AUTHPLAIN) );
+        pProtoData->_sd_pAuth = (PAUTH)malloc( sizeof(AUTHPLAIN) );
         if ( pProtoData->_sd_pAuth == NULL )
           break;
         _ctxAuthWrite( pCtx, 0, NULL );      // Send empty <+>-response.
@@ -997,7 +996,7 @@ static ULONG cfnAuthenticate(PCLNTDATA pClntData, PPROTODATA pProtoData,
 
     case 1:  // _AUTH_CRAMMD5
       {
-        PAUTHCRAMMD5   pAuth = hmalloc( sizeof(AUTHCRAMMD5) );
+        PAUTHCRAMMD5   pAuth = malloc( sizeof(AUTHCRAMMD5) );
         LONG           cb;
 
         if ( pAuth == NULL )
@@ -1013,7 +1012,7 @@ static ULONG cfnAuthenticate(PCLNTDATA pClntData, PPROTODATA pProtoData,
                                NULL );
         if ( cb == -1 )
         {
-          hfree( pAuth );
+          free( pAuth );
           netsrvClntLog( pClntData, 0, "Could not generate challenge" );
         }
         else
@@ -1362,7 +1361,7 @@ static ULONG cfnIdle(PCLNTDATA pClntData, PPROTODATA pProtoData, PCTX pCtx)
   PCMDDATA   pCmdData = pProtoData->pCmdData;
 
   pProtoData->ulState = _STATE_IDLE;
-  pProtoData->_sd_pszIdleCmdId = hstrdup( pCmdData->acId );
+  pProtoData->_sd_pszIdleCmdId = strdup( pCmdData->acId );
 
   /*
      [RFC 2177] 3. Specification
@@ -1621,7 +1620,7 @@ static BOOL _parseFetchBody(PSZ *ppszText, PIMFBODYPARAM pBody/*, BOOL fPeek*/)
         case 4: // MIME MIME fields.
           pBody->pszFields = pszMIMEFields;
 
-        case 1: // HEADER.FIELDS Listed fields only, field list is not empty..
+        case 1: // HEADER.FIELDS Listed fields only, field list is not empty.
           pBody->ulFlags = IMFFL_HEADER;
           break;
 
@@ -1826,6 +1825,8 @@ static ULONG cfnFetch(PCLNTDATA pClntData, PPROTODATA pProtoData, PCTX pCtx)
     }
     else
     {
+      // Collect ulItems flags _FETCH_xxxxx.
+
       switch( lItem )
       {
         case _FETCH_ALL:
@@ -1872,11 +1873,14 @@ static ULONG cfnFetch(PCLNTDATA pClntData, PPROTODATA pProtoData, PCTX pCtx)
   fsEnumMsgBegin( &pProtoData->stUHSess, &stEnum, pSeqSet, pUIDSet );
   while( fsEnumMsg( &pProtoData->stUHSess, &stEnum ) )
   {
-    if ( ( (ulItems & (_FETCH_RFC822SIZE_MASK | _FETCH_INTERNALDATE_MASK)) != 0 )
-         && !utilQueryFileInfo( stEnum.acFile, &stFTimestamp, &ullFSize ) )
+    if ( (ulItems & (_FETCH_RFC822SIZE_MASK | _FETCH_INTERNALDATE_MASK)) != 0 )
     {
-      debug( "utilQueryFileInfo(\"%s\",) failed", stEnum.acFile );
-      continue;
+      debug( "utilQueryFileInfo(\"%s\",,)...", stEnum.acFile );
+      if ( !utilQueryFileInfo( stEnum.acFile, &stFTimestamp, &ullFSize ) )
+      {
+        debug( "utilQueryFileInfo(\"%s\",) failed", stEnum.acFile );
+        continue;
+      }
     }
 
     ctxWriteFmt( pCtx, "* %u FETCH (", stEnum.ulIndex );
@@ -1897,6 +1901,9 @@ static ULONG cfnFetch(PCLNTDATA pClntData, PPROTODATA pProtoData, PCTX pCtx)
         fFlSeenChanged = TRUE;
       }
     }
+
+    /* ulItems - flags for all request parts except particular body section
+       for BODY[...] and BODY.PEEK[...]  */
 
     if ( (ulItems & _FETCH_BODY_MASK) != 0 )
     {
@@ -2071,7 +2078,9 @@ static ULONG cfnFetch(PCLNTDATA pClntData, PPROTODATA pProtoData, PCTX pCtx)
       }
     }
 
-    // The text of a particular body section - BODY[...]<n> ...
+    /* The text of a particular body section - BODY[...]<n> ...
+       We cache the response context to avoid opening the file frequently and
+       examine its structure.  */
 
     for( ulIdx = 0; ulIdx < cBodySect; ulIdx++ )
     {
@@ -2079,7 +2088,12 @@ static ULONG cfnFetch(PCLNTDATA pClntData, PPROTODATA pProtoData, PCTX pCtx)
       pCtxItem = _bcGet( pProtoData, stEnum.ulUID, &pBodySect[ulIdx] );
       fCached = pCtxItem != NULL;
       if ( !fCached )
+      {
+        debugCP( "Body was not cached" );
         pCtxItem = imfGetBody( stEnum.acFile, &pBodySect[ulIdx] );
+      }
+      else
+        debugCP( "Body has been cached" );
 
       if ( pCtxItem != NULL )
       {
@@ -2361,7 +2375,7 @@ static BOOL imapRequest(PCLNTDATA pClntData, LONG cbInput, PCHAR pcInput)
       pProtoData->ulState = _STATE_SELECTED;
       ulResp = _clntWriteResp( pClntData, pProtoData->_sd_pszIdleCmdId, "IDLE",
                                IMAPR_OK_IDLE_TERMINATED );
-      hfree( pProtoData->_sd_pszIdleCmdId );
+      free( pProtoData->_sd_pszIdleCmdId );
       pProtoData->_sd_pszIdleCmdId = NULL;
     }
     else
@@ -2535,7 +2549,7 @@ static BOOL imapRequest(PCLNTDATA pClntData, LONG cbInput, PCHAR pcInput)
 
     // Create the PCMDDATA object.
 
-    pCmdData = hcalloc( 1, sizeof(CMDDATA) + strlen( pszCmdId ) );
+    pCmdData = calloc( 1, sizeof(CMDDATA) + strlen( pszCmdId ) );
     if ( pCmdData == NULL )
       return _clntWriteResp( pClntData, pszCmdId, pszCmd,
                              IMAPR_NO_INTERNAL_ERROR );

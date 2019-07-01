@@ -1,11 +1,11 @@
 /*
-  SEARCH command implementation for IMAP4 protocol.
+    SEARCH command implementation for IMAP4 protocol.
 
-  This module exports only one function:
+    This module exports only one function:
 
-    ULONG cmdSearch(PUHSESS pUHSess, PCTX pCtx, BOOL fUID, PSZ pszLine)
+      ULONG cmdSearch(PUHSESS pUHSess, PCTX pCtx, BOOL fUID, PSZ pszLine)
 
-  which is called from the function imap.c/imapRequest()->cfnSearch().
+    which is called from the function imap.c/imapRequest()->cfnSearch().
 */
 
 #include <string.h>

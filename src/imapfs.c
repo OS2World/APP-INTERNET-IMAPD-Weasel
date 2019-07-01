@@ -15,7 +15,6 @@
 #include "log.h"
 #include "utils.h"
 #include "xmlutils.h"
-#include "hmem.h"
 #include "context.h"
 #include "storage.h"
 #include "pop3.h"
@@ -130,7 +129,7 @@ static VOID __mkFTime(struct tm *pTM, PFDATE pFDate, PFTIME pFTime)
 
 static VOID _msgFree(PMESSAGE pMsg)
 {
-  hfree( pMsg );
+  free( pMsg );
 }
 
 
@@ -141,7 +140,7 @@ static PMAILBOX _mboxNew(PVDIR pVDir, ULONG ulUIDValidity)
   if ( ( pVDir == NULL ) || ( pVDir->pMailbox != NULL ) )
     return NULL;
 
-  pMailbox = hcalloc( 1, sizeof(MAILBOX) );
+  pMailbox = calloc( 1, sizeof(MAILBOX) );
   if ( pMailbox == NULL )
     return NULL;
 
@@ -161,13 +160,13 @@ static VOID _mboxFree(PMAILBOX pMailbox)
   {
     for( ulIdx = 0; ulIdx < pMailbox->cMessages; ulIdx++ )
       _msgFree( pMailbox->papMessages[ulIdx] );
-    hfree( pMailbox->papMessages );
+    free( pMailbox->papMessages );
   }
 
   if ( pMailbox->pVDir != NULL )
     pMailbox->pVDir->pMailbox = NULL;
 
-  hfree( pMailbox );
+  free( pMailbox );
 }
 
 // Returns UID of the new message or 0 on error.
@@ -178,13 +177,13 @@ static ULONG _mboxAddMessage(PMAILBOX pMailbox, PSZ pszFName, ULONG ulFlags)
   if ( ( pszFName == NULL ) || ( *pszFName == '\0' ) )
     return 0;
 
-  pMsg = hmalloc( sizeof(MESSAGE) + strlen( pszFName ) );
+  pMsg = malloc( sizeof(MESSAGE) + strlen( pszFName ) );
   if ( pMsg == NULL )
     return 0;
 
   if ( pMailbox->cMessages == pMailbox->ulMaxMessages )
   {
-    PMESSAGE *pNew = hrealloc( pMailbox->papMessages,
+    PMESSAGE *pNew = realloc( pMailbox->papMessages,
                            (pMailbox->ulMaxMessages + 32) * sizeof(PMESSAGE) );
 
     if ( pNew == NULL )
@@ -260,12 +259,12 @@ static VOID _mboxGetCnt(PMAILBOX pMailbox, PULONG pulRecent, PULONG pulUnseen)
 
 static PVDIR _vdirNew(PSZ pszName)
 {
-  PVDIR      pVDir = hmalloc( sizeof(VDIR) );
+  PVDIR      pVDir = malloc( sizeof(VDIR) );
 
-  pVDir->pszName = hstrdup( pszName );
+  pVDir->pszName = strdup( pszName );
   if ( pVDir->pszName == NULL )
   {
-    hfree( pVDir );
+    free( pVDir );
     return NULL;
   }
 
@@ -284,9 +283,9 @@ static VOID _vdirFree(PVDIR pVDir)
     _mboxFree( pVDir->pMailbox );
 
   if ( pVDir->pszName != NULL )
-    hfree( pVDir->pszName );
+    free( pVDir->pszName );
 
-  hfree( pVDir );
+  free( pVDir );
 }
 
 static VOID _vdirInsert(PVDIR pVDir, PVDIR pVDirSub)
@@ -388,7 +387,7 @@ static VOID __homeLoad(PUSERHOME pHome)
   if ( pHome->ulMaxSubscribe != 0 )
   {
     pHome->cSubscribe = 0;
-    pHome->ppszSubscribe = hmalloc( pHome->ulMaxSubscribe * sizeof(PSZ) );
+    pHome->ppszSubscribe = malloc( pHome->ulMaxSubscribe * sizeof(PSZ) );
 
     if ( pHome->ppszSubscribe == NULL )
       pHome->ulMaxSubscribe = 0;
@@ -403,7 +402,7 @@ static VOID __homeLoad(PUSERHOME pHome)
           continue;
 
         pHome->ppszSubscribe[pHome->cSubscribe] =
-          hstrdup( xmluGetNodeText( pxmlMBox ) );
+          strdup( xmluGetNodeText( pxmlMBox ) );
         if ( pHome->ppszSubscribe[pHome->cSubscribe] != NULL )
           pHome->cSubscribe++;
       }
@@ -724,11 +723,11 @@ static PUSERHOME _homeNew(PSZ pszPath)
     return NULL;
   }
 
-  pHome = hcalloc( 1, sizeof(USERHOME) );
+  pHome = calloc( 1, sizeof(USERHOME) );
   if ( pHome == NULL )
     return NULL;
 
-  pHome->pszPath = hstrdup( pszPath );
+  pHome->pszPath = strdup( pszPath );
   if ( pHome->pszPath != NULL )
   do
   {
@@ -774,9 +773,9 @@ static PUSERHOME _homeNew(PSZ pszPath)
     DosCloseMutexSem( pHome->hmtxLock );
 
   if ( pHome->pszPath != NULL )
-    hfree( pHome->pszPath );
+    free( pHome->pszPath );
 
-  hfree( pHome );
+  free( pHome );
 
   return NULL;
 }
@@ -796,19 +795,19 @@ static VOID _homeFree(PUSERHOME pHome)
   lnkseqFree( &pHome->lsVDir, PVDIR, _vdirFree );
 
   if ( pHome->pszPath != NULL )
-    hfree( pHome->pszPath );
+    free( pHome->pszPath );
 
   DosCloseMutexSem( pHome->hmtxLock );
 
   if ( pHome->ppszSubscribe != NULL )
   {
     for( ulIdx = 0; ulIdx < pHome->cSubscribe; ulIdx++ )
-      hfree( pHome->ppszSubscribe[ulIdx] );
+      free( pHome->ppszSubscribe[ulIdx] );
 
-    hfree( pHome->ppszSubscribe );
+    free( pHome->ppszSubscribe );
   }
 
-  hfree( pHome );
+  free( pHome );
 }
 
 static ULONG _homeRemoveSess(PUSERHOME pHome, PUHSESS pUHSess)
@@ -901,18 +900,18 @@ static BOOL _homeSubscribe(PUSERHOME pHome, PSZ pszMailbox, BOOL fSubscribe)
     if ( ( pVDir == NULL ) /*|| ( pVDir->pMailbox == NULL )*/ )
       return FALSE;
 
-    pszMailbox = hstrdup( pszMailbox );
+    pszMailbox = strdup( pszMailbox );
     if ( pszMailbox == NULL )
       return FALSE;
 
     if ( pHome->cSubscribe == pHome->ulMaxSubscribe )
     {
-      PSZ      *ppszNew = hrealloc( pHome->ppszSubscribe,
+      PSZ      *ppszNew = realloc( pHome->ppszSubscribe,
                                    (pHome->ulMaxSubscribe + 8) * sizeof(PSZ) );
 
       if ( ppszNew == NULL )
       {
-        hfree( pszMailbox );
+        free( pszMailbox );
         return FALSE;
       }
 
@@ -934,7 +933,7 @@ static BOOL _homeSubscribe(PUSERHOME pHome, PSZ pszMailbox, BOOL fSubscribe)
       return FALSE;
     }
 
-    hfree( *ppszFound );
+    free( *ppszFound );
     pHome->cSubscribe--;
     memcpy( ppszFound, &ppszFound[1],
             (pHome->cSubscribe - ulIndex) * sizeof(PSZ) );
@@ -978,7 +977,7 @@ static VOID _homeBroadcastMessageCh(PUSERHOME pHome, PMAILBOX pMailbox,
 
     if ( (pScan->cChgMsg & 0x0F) == 0 )
     {
-      PCHGMSG  pNew = hrealloc( pScan->pChgMsg,
+      PCHGMSG  pNew = realloc( pScan->pChgMsg,
                                 (pScan->cChgMsg + 0x10) * sizeof(CHGMSG) );
       if ( pNew == NULL )
         return;
@@ -1155,7 +1154,7 @@ static BOOL _homeDeleteMailbox(PUSERHOME pHome, PSZ pszMailbox)
         pScan->cChgMsg = 0;
         if ( pScan->pChgMsg != NULL )
         {
-          hfree( pScan->pChgMsg );
+          free( pScan->pChgMsg );
           pScan->pChgMsg = NULL;
         }
       }
@@ -1650,7 +1649,7 @@ VOID fsDone()
       debug( "DosCloseEventSem(), rc = %u", ulRC );
   }
 
-  lnkseqFree( &lsNotifications, PNOTIFICATION, hfree );
+  lnkseqFree( &lsNotifications, PNOTIFICATION, free );
   lnkseqFree( &lsHome, PUSERHOME, _homeFree );
 }
 
@@ -1677,7 +1676,7 @@ VOID fsSessDone(PUHSESS pUHSess)
   }
 
   if ( pUHSess->pChgMsg != NULL )
-    hfree( pUHSess->pChgMsg );
+    free( pUHSess->pChgMsg );
 }
 
 BOOL fsSessOpen(PUHSESS pUHSess, PSZ pszHomeDir)
@@ -1979,7 +1978,7 @@ BOOL fsQueryMailbox(PUHSESS pUHSess, PSZ pszMailbox, ULONG ulOp,
       pUHSess->cChgMsg = 0;
       if ( pUHSess->pChgMsg != NULL )
       {
-        hfree( pUHSess->pChgMsg );
+        free( pUHSess->pChgMsg );
         pUHSess->pChgMsg = NULL;
       }
     }
@@ -2099,7 +2098,7 @@ ULONG fsRename(PUHSESS pUHSess, PSZ pszOldName, PSZ pszNewName)
           if ( !fInboxSelected )
           {
             if ( pUHSess->pChgMsg != NULL )
-              hfree( pUHSess->pChgMsg );
+              free( pUHSess->pChgMsg );
 
             pUHSess->pSelMailbox    = pSelMailbox;
             pUHSess->fSelMailboxRO  = fSelMailboxRO;
@@ -2281,7 +2280,7 @@ VOID fsEnumMsgBegin(PUHSESS pUHSess, PFSENUMMSG pEnum,
     {
       // We have range n:* in numset - add range maxUID:maxUID.
 
-      PUTILRANGE       pNewUIDSet = hmalloc( (cScan + 1) * sizeof(UTILRANGE) );
+      PUTILRANGE       pNewUIDSet = malloc( (cScan + 1) * sizeof(UTILRANGE) );
 
       if ( pNewUIDSet == NULL )
         pEnum->fAsterisk = FALSE;
@@ -2308,7 +2307,7 @@ VOID fsEnumMsgEnd(PUHSESS pUHSess, PFSENUMMSG pEnum)
   _sessUnlockHome( pUHSess );
 
   if ( ( pEnum != NULL ) && pEnum->fAsterisk && ( pEnum->pUIDSet != NULL ) )
-    hfree( pEnum->pUIDSet );
+    free( pEnum->pUIDSet );
 
   debugDec( "fsEnumMsg" );
 }
@@ -2407,7 +2406,7 @@ ULONG fsCopy(PUHSESS pUHSess, PUTILRANGE pSeqSet, PUTILRANGE pUIDSet,
   PMESSAGE       pMsg;
   ULLONG         ullBytes, ullCopyBytes = 0;
   BOOL           fDstIsInbox = stricmp( pszMailbox, "INBOX" ) == 0;
-  BOOL           fPOP3Lock;
+  BOOL           fPOP3Lock = FALSE;
 
   if ( pCopyUID != NULL )
   {
@@ -2603,7 +2602,7 @@ ULONG fsAppend(PUHSESS pUHSess, PFSAPPENDINFO pInfo, PCTX pMsgCtx,
   ULONG      ulActual;
   PVDIR      pVDir;
   ULLONG     ullMsgSize = ctxQuerySize( pMsgCtx );
-  BOOL       fInbox, fPOP3Lock;
+  BOOL       fInbox, fPOP3Lock = FALSE;
 
   _sessLockHome( pUHSess );
 
@@ -2657,7 +2656,7 @@ ULONG fsAppend(PUHSESS pUHSess, PFSAPPENDINFO pInfo, PCTX pMsgCtx,
     logf( 0, "Memory allocation error code: %lu", ulRC );
   else
   {
-    ctxSetReadPos( pMsgCtx, 0 );
+    ctxSetReadPos( pMsgCtx, CTX_RPO_BEGIN, 0 );
 
     do
     {
@@ -3359,7 +3358,7 @@ ULONG fsNotifyChange(ULONG ulDelay, PSZ pszPathname)
     {
       // Create a new notification.
 
-      pNotification = hmalloc( sizeof(NOTIFICATION) +
+      pNotification = malloc( sizeof(NOTIFICATION) +
                                strlen( stHomePath.acPathname ) );
       if ( pNotification == NULL )
         ulRC = FSNRC_INTERNAL_ERROR;
@@ -3422,7 +3421,7 @@ ULONG fsNotifyCheck(ULONG ulTime, ULONG cbBuf, PCHAR pcBuf)
           strlcpy( pcBuf, pScan->acPathname, cbBuf );
 
         lnkseqRemove( &lsNotifications, pScan );
-        hfree( pScan );
+        free( pScan );
       }
       break;
     }

@@ -1580,7 +1580,7 @@ PCTX imfGetBody(PSZ pszFile, PIMFBODYPARAM pBody)
          ( pBody->ullLength >= cbCtx ) )
       pBody->ullLength = cbCtx;
 
-    ctxSetReadPos( pCtx, pBody->ullStart );
+    ctxSetReadPos( pCtx, CTX_RPO_BEGIN, pBody->ullStart );
   }
 
   return pCtx;

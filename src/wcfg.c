@@ -12,7 +12,6 @@
 #include "log.h"
 #include "imap.h"
 #include "inifiles.h"
-#include "hmem.h"
 #include "storage.h"
 #include "wcfg.h"
 #include "debug.h"               // Should be last.
@@ -96,14 +95,14 @@ static PSZ _iniQueryNewString(PINI pINI, PSZ pszApp, PSZ pszKey)
   }
 
   cbStr++;
-  pszStr = hmalloc( cbStr );
+  pszStr = malloc( cbStr );
   if ( pszStr == NULL )
     return FALSE;
 
   if ( !iniQueryData( pINI, pszApp, pszKey, pszStr, &cbStr ) )
   {
     debug( "iniQueryData(,\"%s\",\"%s\",,) failed", pszApp, pszKey );
-    hfree( pszStr );
+    free( pszStr );
     return NULL;
   }
   pszStr[cbStr] = '\0';
@@ -141,15 +140,15 @@ static VOID _domainFree(PDOMAIN pDomain)
 
   for( ulIdx = 0; ulIdx < pDomain->cLogins; ulIdx++ )
     if ( pDomain->apLogins[ulIdx] != NULL )
-      hfree( pDomain->apLogins[ulIdx] );
+      free( pDomain->apLogins[ulIdx] );
 
   if ( pDomain->pszName != NULL )
-    hfree( pDomain->pszName );
+    free( pDomain->pszName );
 
   if ( pDomain->pcAliases != NULL )
-    hfree( pDomain->pcAliases );
+    free( pDomain->pcAliases );
 
-  hfree( pDomain );
+  free( pDomain );
 }
 
 static PDOMAIN _domainINIHdlNew(PINI pINI, PSZ pszDomain)
@@ -172,7 +171,7 @@ static PDOMAIN _domainINIHdlNew(PINI pINI, PSZ pszDomain)
     }
 
     cbLogins++;
-    pszLogins = hmalloc( cbLogins );
+    pszLogins = malloc( cbLogins );
     if ( pszLogins == NULL )
       break;
 
@@ -193,7 +192,7 @@ static PDOMAIN _domainINIHdlNew(PINI pINI, PSZ pszDomain)
       // Make login record: username<ZERO>password<ZERO>
       cbLogins = strlen( pszScan );
       cbPassword++;
-      pLogin = hmalloc( sizeof(LOGIN) + cbLogins + 1 + cbPassword );
+      pLogin = malloc( sizeof(LOGIN) + cbLogins + 1 + cbPassword );
       if ( pLogin == NULL )
         break;
 
@@ -212,12 +211,12 @@ static PDOMAIN _domainINIHdlNew(PINI pINI, PSZ pszDomain)
       if ( (cbLogins & 0x00FF) == 0 )
       {
         // Expand DOMAIN object.
-        PDOMAIN  pNew = hrealloc( pDomain,
+        PDOMAIN  pNew = realloc( pDomain,
                                  ( sizeof(DOMAIN) - sizeof(PLOGIN) ) +
                                  ( (cbLogins + 0x0100) * sizeof(PLOGIN) ) );
         if ( pNew == NULL )
         {
-          hfree( pLogin );
+          free( pLogin );
           break;
         }
         pDomain = pNew;
@@ -232,7 +231,7 @@ static PDOMAIN _domainINIHdlNew(PINI pINI, PSZ pszDomain)
     {
       // No IMAP4 users were found. Create an empty list (DOMAIN object).
 
-      pDomain = hmalloc( sizeof(DOMAIN) - sizeof(PLOGIN) );
+      pDomain = malloc( sizeof(DOMAIN) - sizeof(PLOGIN) );
       if ( pDomain == NULL )
         break;
       pDomain->cLogins = 0;
@@ -241,7 +240,7 @@ static PDOMAIN _domainINIHdlNew(PINI pINI, PSZ pszDomain)
     if ( pszDomain != NULL )
     {
       // Store domain name in DOMAIN object.
-      pDomain->pszName = hstrdup( pszDomain );
+      pDomain->pszName = strdup( pszDomain );
       fSuccess = pDomain->pszName != NULL;
     }
     else
@@ -259,12 +258,12 @@ static PDOMAIN _domainINIHdlNew(PINI pINI, PSZ pszDomain)
   while( FALSE );
 
   if ( pszLogins != NULL )
-    hfree( pszLogins );
+    free( pszLogins );
 
   if ( fSuccess )
   {
     // Collapse DOMAIN object.
-    PDOMAIN  pNew = hrealloc( pDomain, ( sizeof(DOMAIN) - sizeof(PLOGIN) ) +
+    PDOMAIN  pNew = realloc( pDomain, ( sizeof(DOMAIN) - sizeof(PLOGIN) ) +
                                        ( pDomain->cLogins * sizeof(PLOGIN) ) );
     if ( pNew != NULL )
       pDomain = pNew;
@@ -318,12 +317,12 @@ static VOID _wcfgFree(PWCFG pWCfg)
   }
 
   if ( pWCfg->pszMailRoot != NULL )
-    hfree( pWCfg->pszMailRoot );
+    free( pWCfg->pszMailRoot );
 
   if ( pWCfg->pszOurHostName != NULL )
-    hfree( pWCfg->pszOurHostName );
+    free( pWCfg->pszOurHostName );
 
-  hfree( pWCfg );
+  free( pWCfg );
 }
 
 #define _LOAD_OK                 0
@@ -452,7 +451,7 @@ ULONG _wcfgLoad(PSZ pszFile, ULONG ulINIType, PUTILFTIMESTAMP pFTimestamp,
     // Single domain mode - read logins from WEASEL.INI or WEASEL.TNI.
 
     debugCP( "Single domain mode" );
-    pNewWCfg = hmalloc( sizeof(WCFG) );
+    pNewWCfg = malloc( sizeof(WCFG) );
 
     if ( pNewWCfg == NULL )
       debugCP( "Not enough memory" );
@@ -478,7 +477,7 @@ ULONG _wcfgLoad(PSZ pszFile, ULONG ulINIType, PUTILFTIMESTAMP pFTimestamp,
       for( pszScan = pszDomains, cDomains = 0; *pszScan != '\0';
            pszScan = strchr( pszScan, '\0' ) + 1, cDomains++ );
 
-      pNewWCfg = hmalloc( ( sizeof(WCFG) - sizeof(PDOMAIN) ) +
+      pNewWCfg = malloc( ( sizeof(WCFG) - sizeof(PDOMAIN) ) +
                           ( cDomains * sizeof(PDOMAIN) ) );
       if ( pNewWCfg == NULL )
         debugCP( "Not enough memory" );
@@ -500,7 +499,7 @@ ULONG _wcfgLoad(PSZ pszFile, ULONG ulINIType, PUTILFTIMESTAMP pFTimestamp,
         fSuccess = *pszScan == '\0';
       }
 
-      hfree( pszDomains );
+      free( pszDomains );
     } // if ( pszDomains != NULL )
   } // Multidomain mode
 
@@ -515,7 +514,7 @@ ULONG _wcfgLoad(PSZ pszFile, ULONG ulINIType, PUTILFTIMESTAMP pFTimestamp,
              : 0;
     acOurHostName[ulRC] = '\0';
 
-    pNewWCfg->pszOurHostName = ulRC == 0 ? NULL : hstrdup( acOurHostName );
+    pNewWCfg->pszOurHostName = ulRC == 0 ? NULL : strdup( acOurHostName );
 
     // "Bad password limit" setup option.
     pNewWCfg->ulBadPasswordLimit =
@@ -525,7 +524,7 @@ ULONG _wcfgLoad(PSZ pszFile, ULONG ulINIType, PUTILFTIMESTAMP pFTimestamp,
     pNewWCfg->fSingleMatch =
       _iniQueryLong( &stINI, "$SYS", "SingleMatch", 0 ) != 0;
 
-    pNewWCfg->pszMailRoot = hstrdup( acMailRool );
+    pNewWCfg->pszMailRoot = strdup( acMailRool );
     if ( pNewWCfg->pszMailRoot == NULL )
       debugCP( "Not enough memory" );
     fSuccess = pNewWCfg->pszMailRoot != NULL;
@@ -597,7 +596,7 @@ BOOL wcfgInit(PSZ pszPath, ULONG ulSelectCfg)
     if ( pszPath[cbWeaselPath - 1] == '\\' )
       cbWeaselPath--;
 
-    pszWeaselPath = hmalloc( cbWeaselPath + 1);
+    pszWeaselPath = malloc( cbWeaselPath + 1);
     if ( pszWeaselPath == NULL )
       return FALSE;
 
@@ -630,7 +629,7 @@ VOID wcfgDone()
 {
   if ( pszWeaselPath != NULL )
   {
-    hfree( pszWeaselPath );
+    free( pszWeaselPath );
     pszWeaselPath = NULL;
   }
 
@@ -712,19 +711,19 @@ BOOL wcfgUpdate(BOOL fIgnoreFTimeCheck)
   }
   else if ( fINIExist )
   {
-    debugCP( "Only file WEASEL.INI exist" );
+//    debugCP( "Only file WEASEL.INI exist" );
     ulRC = _wcfgLoad( acINIFile, INITYPE_INI, &stINITime, fIgnoreFTimeCheck,
                       FALSE );
   }
   else if ( fTNIExist )
   {
-    debugCP( "Only file WEASEL.TNI exist" );
+//    debugCP( "Only file WEASEL.TNI exist" );
     ulRC = _wcfgLoad( acTNIFile, INITYPE_TNI, &stTNITime, fIgnoreFTimeCheck,
                       FALSE );
   }
   else
   {
-    debugCP( "WEASEL.INI and WEASEL.TNI do not exist" );
+//    debugCP( "WEASEL.INI and WEASEL.TNI do not exist" );
     return FALSE;
   }
 
@@ -856,7 +855,7 @@ PWCFINDUSR wcfgFindUserBegin(PSZ pszUser, ULONG ulReqFlags)
   PSZ        pszDomain;
   ULONG      ulRC;
 
-  pFind = hmalloc( sizeof(WCFINDUSR) + strlen(pszUser) );
+  pFind = malloc( sizeof(WCFINDUSR) + strlen(pszUser) );
   if ( pFind == NULL )
   {
     debug( "Not enough high memory" );
@@ -888,14 +887,14 @@ PWCFINDUSR wcfgFindUserBegin(PSZ pszUser, ULONG ulReqFlags)
   {
 //logf( 1, "[EXT] wcfgFindUserBegin(): DosRequestMutexSem(hmtxWCfg,), rc = %u", ulRC );
     debug( "DosRequestMutexSem(), rc = %u", ulRC );
-    hfree( pFind );
+    free( pFind );
     return NULL;
   }
 
   if ( pWCfg == NULL )
   {
     DosReleaseMutexSem( hmtxWCfg );
-    hfree( pFind );
+    free( pFind );
     return NULL;
   }
 
@@ -913,7 +912,7 @@ VOID wcfgFindUserEnd(PWCFINDUSR pFind)
   if ( ulRC != NO_ERROR )
     debug( "DosReleaseMutexSem(), rc = %u", ulRC );
 
-  hfree( pFind );
+  free( pFind );
 }
 
 BOOL wcfgFindUser(PWCFINDUSR pFind)

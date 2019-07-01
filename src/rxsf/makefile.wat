@@ -3,7 +3,7 @@
 #
 
 DLLNAME = rxsf
-VERSION = 1.0.1
+VERSION = 1.0.2
 BINPATH = ..\..\imapd
 AUTOR = Andrey Vasilkin
 COMMENT = REXX interface for SpamFilter and imapd
@@ -13,7 +13,7 @@ COMMENT = REXX interface for SpamFilter and imapd
 DLLFILE = $(BINPATH)\$(DLLNAME).dll
 LNKFILE = $(DLLNAME).lnk
 
-SRCS = rxsf.c utils.c
+SRCS = rxsf.c
 !ifdef DEBUG
 SRCS += debug.c
 !endif

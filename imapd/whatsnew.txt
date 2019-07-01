@@ -1,3 +1,24 @@
+2019-06-26 ver. 0.1.13
+  - Optimization of the operation of the pipes transmitting log from Weasel.
+  - Version number in usage information (command line switch -?).
+  - Shared named pipe interface for the control protocol.
+  - A new filter imapStage4.cmd for Weasel. Now it uses a pipe and may operate
+    without rxsf.dll library.
+
+2019-06-14 ver. 0.1.12
+  - Several optimizations of data transmission over sockets.
+
+2019-06-11 ver. 0.1.11
+  - Reading Weasel log from alternative named pipes. Redirecting the Weasel log
+    to the new named pipes.
+    See the new format for -w command-line switch.
+  - Removed own high memory manager. Linked with switch -Zhigh-mem.
+
+2019-03-05 ver. 0.1.10
+  - The potential threat of blocking a mailbox when accessing via the POP3
+    protocol after accessing via IMAP has been eliminated.
+  - Added file imapd.xqs for Execptq.
+
 2018-11-20 ver. 0.1.9
   - The order of the values of ServerPort and TimeOut configuration keys has
     changed in recent versions of Weasel. Corresponding changes for IMAPD are

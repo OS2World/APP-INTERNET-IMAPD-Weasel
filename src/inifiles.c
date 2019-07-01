@@ -8,7 +8,6 @@
 #define INCL_WINSHELLDATA
 #include <os2.h>
 #include "inifiles.h"
-#include "hmem.h"
 #include "utils.h"
 #include "debug.h"               // Should be last.
 
@@ -109,7 +108,7 @@ static BOOL _tniInsData(PTNIREAD pReadData, ULONG cbData, PVOID pData)
     PCHAR    pcNew;
 
     ulNewSize = (ulNewSize & ~0x00FF) + 0x0100;
-    pcNew = hrealloc( pReadData->pcBuf, ulNewSize );
+    pcNew = realloc( pReadData->pcBuf, ulNewSize );
     if ( pcNew == NULL )
       return FALSE;
     pReadData->pcBuf = pcNew;
@@ -129,7 +128,7 @@ static BOOL _insertItem(PVOID **ppapArray, PULONG pcItems, PVOID pItem)
 
   if ( (cItems & 0x3F) == 0 )
   {
-    PVOID    *papNew = hrealloc( papArray, (cItems + 0x40) * sizeof(PVOID) );
+    PVOID    *papNew = realloc( papArray, (cItems + 0x40) * sizeof(PVOID) );
 
     if ( papNew == NULL )
     {
@@ -372,7 +371,7 @@ static PTNIKEY _tniNewKey(PTNIREAD pReadData, ULONG cbLine, PSZ pszLine)
 
   // Create TNIKEY object.
 
-  pKey = hmalloc( sizeof(TNIKEY) + cbName + 1 + pReadData->cbBuf );
+  pKey = malloc( sizeof(TNIKEY) + cbName + 1 + pReadData->cbBuf );
   if ( pKey == NULL )
   {
     debugCP( "Not enough memory" );
@@ -398,12 +397,12 @@ static VOID _tniFreeApp(PTNIAPP pApp)
   if ( pApp->papKey != NULL )
   {
     for( ulIdx = 0; ulIdx < pApp->cKey; ulIdx++ )
-      hfree( pApp->papKey[ulIdx] );
+      free( pApp->papKey[ulIdx] );
 
-    hfree( pApp->papKey );
+    free( pApp->papKey );
   }
 
-  hfree( pApp );
+  free( pApp );
 }
 
 static PTNIAPP _tniReadApp(PTNIREAD pReadData, ULONG cbName, PCHAR pcName)
@@ -415,7 +414,7 @@ static PTNIAPP _tniReadApp(PTNIREAD pReadData, ULONG cbName, PCHAR pcName)
   PTNIKEY    pKey;
   BOOL       fError = FALSE;
 
-  pApp = hmalloc( sizeof(TNIAPP) + cbName );
+  pApp = malloc( sizeof(TNIAPP) + cbName );
   if ( pApp == NULL )
   {
     debugCP( "Not enough memory" );
@@ -446,7 +445,7 @@ static PTNIAPP _tniReadApp(PTNIREAD pReadData, ULONG cbName, PCHAR pcName)
          !_insertItem( (PVOID **)&pApp->papKey, &pApp->cKey, pKey ) )
     {
       debugCP( "_insertItem() failed" );
-      hfree( pKey );
+      free( pKey );
       fError = TRUE;
       break;
     }
@@ -466,7 +465,7 @@ static PTNIAPP _tniReadApp(PTNIREAD pReadData, ULONG cbName, PCHAR pcName)
 static LHANDLE APIENTRY tniOpen(LHANDLE hab, PSZ pszFileName)
 {
   TNIREAD    stReadData;
-  PTNI       pTNI = hcalloc( 1, sizeof(TNI) );
+  PTNI       pTNI = calloc( 1, sizeof(TNI) );
   CHAR       acBuf[1024];
   ULONG      cbLine;
   PSZ        pszLine;
@@ -485,7 +484,7 @@ static LHANDLE APIENTRY tniOpen(LHANDLE hab, PSZ pszFileName)
   if ( stReadData.fd == NULL )
   {
     debug( "Cannot open a file: %s", pszFileName );
-    hfree( pTNI );
+    free( pTNI );
     return NULLHANDLE;
   }
 
@@ -522,7 +521,7 @@ static LHANDLE APIENTRY tniOpen(LHANDLE hab, PSZ pszFileName)
 
   fclose( stReadData.fd );
   if ( stReadData.pcBuf != NULL )
-    hfree( stReadData.pcBuf );
+    free( stReadData.pcBuf );
 
   if ( fError )
   {
@@ -547,10 +546,10 @@ static BOOL APIENTRY tniClose(LHANDLE hObj)
     for( ulIdx = 0; ulIdx < pTNI->cApp; ulIdx++ )
       _tniFreeApp( pTNI->papApp[ulIdx] );
 
-    hfree( pTNI->papApp );
+    free( pTNI->papApp );
   }
 
-  hfree( pTNI );
+  free( pTNI );
 
   return FALSE;
 }

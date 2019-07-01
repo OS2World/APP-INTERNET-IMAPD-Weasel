@@ -3,20 +3,21 @@
   ------------
 
 context           Context object (CTX).
-debug             Debug module - debug logfile, memory leaks definition, e.t.c.
-hmem              High memory manager.
+debug             Debug module - debug logfile, memory leaks finding, e.t.c.
 log               Logfiles.
+control           Control protocol.
+ctlpipe           Control protocol on pipe.
 netserv           Generic network server.
-  ctrlp           Local control protocol implementatin.
-  pop3            POP3 protocol implementatin.
-  imap            IMAP protocol implementatin.
+  ctlproto        Control protocol on local sockets.
+  pop3            POP3 protocol implementation.
+  imap            IMAP protocol implementation.
     imapfs        "File system" for IMAP - user home objects, sessions.
       storage     Collect storage sizes information, file lists.
     cmdsearch     IMAP4 SEARCH command implementation.
     message       Message format reader, parser, other stuff around RFC 2822.
 wcfg              Weasel configuration reader.
   inifiles        INI/TNI files reader.
-wlog              Weasel log pipe reader.
+piper             Weasel log pipe reader and redirector.
 linkseq.h         Linked objects lists management.
 
 
@@ -24,6 +25,6 @@ linkseq.h         Linked objects lists management.
   -----
 
 .\rxsf            REXX API for local named sockets (rxsf.dll).
-.\libgiconv       Generic iconv wraprer for different libraries: kiconv.dll,
-                  iconv2.dll, iconv.dll or OS/2 Uni*() API (libgiconv.a).
+.\libgiconv       Generic iconv wraprer for different libraries: iconv2.dll,
+                  kiconv.dll, iconv.dll or OS/2 Uni*() API (libgiconv.a).
 .\doc             RFC documentation collection.

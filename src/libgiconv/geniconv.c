@@ -47,9 +47,7 @@ static HMODULE         hmIconv = NULLHANDLE;
 static FNICONV_OPEN    fn_iconv_open = NULL;
 static FNICONV         fn_iconv = NULL;
 static FNICONV_CLOSE   fn_iconv_close = NULL;
-// Flag: one of iconv DLL is used and local codepage is 437.
-static BOOL            fLocalCP437 = FALSE;
-
+static CHAR            acLocalCharset[16] = { 0 };
 
 
 static BOOL _loadDLL(PSZ pszName, PSZ pszIconvOpen, PSZ pszIconv,
@@ -108,15 +106,15 @@ static void _init()
 
   pszEnvSet = getenv( "GENICONV" );
 
-  // Try to load kiconv.dll, iconv2.dll or iconv.dll.
+  // Try to load iconv2.dll, kiconv.dll or iconv.dll.
   if (
        (
          ( pszEnvSet != NULL ) && ( stricmp( pszEnvSet, "UCONV" ) == 0 )
        )
      ||
        (
-         !_loadDLL( "KICONV", "_libiconv_open", "_libiconv", "_libiconv_close" ) &&
          !_loadDLL( "ICONV2", "_libiconv_open", "_libiconv", "_libiconv_close" ) &&
+         !_loadDLL( "KICONV", "_libiconv_open", "_libiconv", "_libiconv_close" ) &&
          !_loadDLL( "ICONV", "_iconv_open", "_iconv", "_iconv_close" )
        )
      )
@@ -137,13 +135,21 @@ static void _init()
 
     if ( ulRC != NO_ERROR ) 
       debug( "DosQueryCp(), rc = %u", ulRC );
-    else if ( aulCP[0] == 437 )
-    {
-      debug( "Local codepage 437 detected" );
-      fLocalCP437 = TRUE;
-    }
     else
-      debug( "Local codepage: %u", aulCP[0] );
+    {
+      if ( aulCP[0] == 437 )
+      {
+        /* We need to use name ISO-8859-1 as system-default cp because iconv
+           DLL does not understand codepage 437. */
+        debug( "Local codepage 437 detected" );
+        strcpy( acLocalCharset, "ISO-8859-1" );
+      }
+      else
+      {
+        debug( "Local codepage: %u", aulCP[0] );
+        sprintf( acLocalCharset, "CP%lu", aulCP[0] );
+      }
+    }
   }
 }
 
@@ -185,15 +191,19 @@ static BOOL _correctName(PSZ *ppszName, PCHAR pcBuf, ULONG cbBuf)
 static iconv_t _iconv_open(const char* tocode, const char* fromcode)
 {
   iconv_t    ic;
+  const char *pcToCode = ( tocode == NULL || *tocode == '\0' ) ?
+                           (const char *)acLocalCharset : tocode;
+  const char *pcFromCode = ( fromcode == NULL || *fromcode == '\0' ) ?
+                             (const char *)acLocalCharset : fromcode;
 
-  ic = fn_iconv_open( tocode, fromcode );
+  ic = fn_iconv_open( pcToCode, pcFromCode );
 
   if ( ic == (iconv_t)-1 )
   {
     CHAR  acToCode[128];
     CHAR  acFromCode[128];
-    BOOL  fToCode = _correctName( (PSZ *)&tocode, acToCode, sizeof(acToCode) );
-    BOOL  fFromCode = _correctName( (PSZ *)&fromcode, acFromCode,
+    BOOL  fToCode = _correctName( (PSZ *)&pcToCode, acToCode, sizeof(acToCode) );
+    BOOL  fFromCode = _correctName( (PSZ *)&pcToCode, acFromCode,
                                     sizeof(acFromCode) );
 
     if ( fToCode || fFromCode )
@@ -223,43 +233,9 @@ void iconv_clean()
 
 iconv_t iconv_open(const char* tocode, const char* fromcode)
 {
-  iconv_t    ic;
-  BOOL       fCP437;
-
   _init();
 
-  ic = _iconv_open( tocode, fromcode );
-
-  // For iconv DLL (not for Uni*() API) and local codepage 437 we use name
-  // ISO-8859-1 when system default codepage specified (name of cp is empty
-  // string).
-  // We need to use name ISO-8859-1 as system-default cp because iconv DLL
-  // does not understand codepage 437.
-
-  if ( ( ic == (iconv_t)-1 ) && fLocalCP437 )
-  {
-    BOOL     fCP437 = FALSE;
-
-    if ( ( tocode != NULL ) && ( *tocode == '\0' ) )
-    {
-      tocode = "ISO-8859-1";
-      fCP437 = TRUE;
-    }
-
-    if ( ( fromcode != NULL ) && ( *fromcode == '\0' ) )
-    {
-      fromcode = "ISO-8859-1";
-      fCP437 = TRUE;
-    }
-
-    if ( fCP437 )
-    {
-      debug( "Local cp is 437, try to open iconv for ISO-8859-1 as system cp" );
-      ic = _iconv_open( tocode, fromcode );
-    }
-  }
-
-  return ic;
+  return _iconv_open( tocode, fromcode );
 }
 
 size_t iconv(iconv_t cd, const char* * inbuf, size_t *inbytesleft,

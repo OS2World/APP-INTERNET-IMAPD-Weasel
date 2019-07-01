@@ -1,0 +1,9 @@
+DESCRIPTION '@#Andrey Vasilkin:1.0.2#@##1## 2019-06-11               DIGI-HOME::::::@@REXX interface for SpamFilter and imapd'
+EXPORTS 
+ RXSFLOADFUNCS              = rxsfLoadFuncs 
+ RXSFDROPFUNCS              = rxsfDropFuncs 
+ RXSFOPEN                   = rxsfOpen 
+ RXSFCLOSE                  = rxsfClose 
+ RXSFSEND                   = rxsfSend 
+ RXSFRECV                   = rxsfRecv 
+ RXSFREQUEST                = rxsfRequest 

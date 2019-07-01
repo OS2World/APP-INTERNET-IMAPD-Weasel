@@ -199,11 +199,21 @@ login name includes a specification of which domain that user is logging into.
   -t  Read configuration data from WEASEL.TNI (ignore the default rules) (*).
 
   -w  Read Weasel detailed log from pipe to fast-tracking incoming messages.
+      Syntax: <O|Q|S>[[,N,ServerPipe]:AlternativePipe1 ... :AlternativePipeN]
 
-        Off    or O  - Do not connect to the pipe.
+      Where:
+
+        Off    or O  - Do not connect to the pipe (those do not receive log).
         Quiet  or Q  - Connect to the pipe.
         Screen or S  - Connect to the pipe and print all output to the screen.
 
+        N,serverPipe - Number and name of new pipes for redirecting Weasel log.
+                       These pipes will be created when IMAPD connects to
+                       Weasel pipe or one of the alternative pipes.
+
+        AlternativePipe - Names of alternative pipes for reading Weasel log.
+
+      Note: prefix \PIPE\ adopted in OS/2 in pipe names may be omitted.
       Default is Quiet (read Weasel log from the pipe without screen output).
 
   -C  Certificate file.
@@ -212,8 +222,8 @@ login name includes a specification of which domain that user is logging into.
   -K  Private key file.
       Default is imapd-key.pem.
 
-  -P  Start POP3 server. The following parameters b,e,C,K,T will apply to POP3
-      server.
+  -P  Start POP3 server. The following parameters b,e,C,K,T will applied to
+      POP3 server.
 
   -T  Normal and maximum number of threads to process requests.
       Default is "4,16".
@@ -242,6 +252,17 @@ Example 2:
 
   >imapd.exe -K key.pem -C cert.pem -l 6,30,0 -b * -b ssl -b any:1143 -P -b*
              -bssl -K key.pem -C cert.pem
+
+Example 3:
+
+  - Listen IMAP4 and POP3 connections on configured in Weasel setup ports.
+  - Listen the piped output from Weasel, print data from the pipe on the screen.
+  - If it is impossible to connect to the Weasel pipe, try to connect to named
+    pipes \PIPE\WeaselTransLog_sf or \PIPE\FILTER.
+  - Create own named pipe \PIPE\WeaselTransLog_imap for up to two clients and
+    duplicate the Weasel log there.
+
+  >imapd.exe -P S,2,WeaselTransLog_imap:WeaselTransLog_sf:FILTER
 
 
 7. Local control protocol
@@ -337,6 +358,7 @@ Full commands list for the control protocol:
 ---
 Donations are most welcome!
 PayPal: digi@os2.snc.ru
+Yandex.Money: 410017073387496
 
-Andrey Vasilkin, 2017-2018
+Andrey Vasilkin, 2017-2019
 E-mail: digi@os2.snc.ru

@@ -25,6 +25,7 @@ cd ..
 rem Make archives of sources and binaries.
 
 echo Packing sources to %fnSrc%
+@rm -f %fnSrc%
 7za.exe a -tzip -mx7 -r0 -x!*.zip %fnSrc% .\src .\imapd make-arch.cmd >nul
 
 rem only sources: exit
@@ -36,7 +37,8 @@ make
 cd ..
 
 echo Packing binaries to %fnBin%
-7za.exe a -tzip -mx7 -r0 %fnBin% .\imapd >nul
+@rm -f %fnBin%
+7za.exe a -tzip -mx7 -r0 -x!imapd\imapd.map %fnBin% .\imapd >nul
 
 echo Cleaning.
 cd src

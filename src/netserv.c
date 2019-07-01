@@ -36,13 +36,14 @@
 
 #include "linkseq.h"
 #include "log.h"
-#include "hmem.h"
 #include "netserv.h"
 #include "debug.h"               // Should be last.
 
 // Defined in main.c with '#include "exceptq.h"'.
 BOOL LoadExceptq(EXCEPTIONREGISTRATIONRECORD* pExRegRec, const char* pOpts,
                  const char* pInfo);
+
+//#define _USE_WRITE_FILTER 1
 
 #ifdef DEBUG_CODE
 #define DEBUG_NETRX
@@ -170,7 +171,7 @@ static BOOL _srvBind(PSERVDATA pServData,
 
   // Add a new socket to the list of server sockets.
 
-  paiSock = hrealloc( pServData->paiSock,
+  paiSock = realloc( pServData->paiSock,
                       ( pServData->cSock + 1 ) * sizeof(int) );
   if ( paiSock == NULL )
     return FALSE;
@@ -195,7 +196,7 @@ static BOOL _srvBind(PSERVDATA pServData,
 
 static PCLNTDATA _srvClientNew(PSERVDATA pServData, int iClntSock, BOOL fSSL)
 {
-  PCLNTDATA  pClntData = hcalloc( 1, sizeof(CLNTDATA) - 1 +
+  PCLNTDATA  pClntData = calloc( 1, sizeof(CLNTDATA) - 1 +
                                      pServData->pProtocol->cbProtoData );
              // Get the client log-records id from the server's object flags.
   ULONG      ulSrvFlags = pServData->ulFlags;
@@ -226,7 +227,7 @@ static PCLNTDATA _srvClientNew(PSERVDATA pServData, int iClntSock, BOOL fSSL)
     {
       if ( pClntData->pCtx != NULL )
         ctxFree( pClntData->pCtx );
-      hfree( pClntData );
+      free( pClntData );
       return NULL;
     }
     pClntData->ulFlags |= _CLNTFL_PROTOINITIALIZED;
@@ -316,7 +317,7 @@ static VOID _srvClientDestroy(PCLNTDATA pClntData)
   if ( pClntData->pcRXData != NULL )
     free( pClntData->pcRXData );
 
-  hfree( pClntData );
+  free( pClntData );
 }
 
 static BOOL _srvClientSSLAccept(PCLNTDATA pClntData)
@@ -516,8 +517,10 @@ static LONG _srvClientSockRecv(PCLNTDATA pClntData, ULONG cbBuf, PVOID pBuf)
     {
       if ( iRC == 0 )
       {
-        debug( "Connection %d closed by the client",
-               pClntData->iSock );
+        _srvClientLog( pClntData, 7, "Connection %d closed by the client",
+                       pClntData->iSock );
+/*        debug( "Connection %d closed by the client",
+               pClntData->iSock );*/
         iRC = -1;
       }
       else
@@ -525,7 +528,8 @@ static LONG _srvClientSockRecv(PCLNTDATA pClntData, ULONG cbBuf, PVOID pBuf)
         int  iErr = sock_errno();
 
         if ( iErr != SOCEWOULDBLOCK )
-          debug( "recv() failed, error: %d", iErr );
+//          debug( "recv() failed, error: %d", iErr );
+          _srvClientLog( pClntData, 7, "recv() failed, error: %d", iErr );
         else
           iRC = 0;
       }
@@ -550,7 +554,9 @@ static LONG _srvClientSockRecv(PCLNTDATA pClntData, ULONG cbBuf, PVOID pBuf)
           {
 //            CHAR       acBuf[128];
 
-            debug( "SSL_read(), Error code: %d", iErr );
+//            debug( "SSL_read(), Error code: %d", iErr );
+            _srvClientLog( pClntData, 7, "SSL_read(), Error code: %d", iErr );
+
 /*            while( ( iErr = ERR_get_error() ) != 0 )
             {
               ERR_error_string_n( iErr, acBuf, sizeof(acBuf) );
@@ -780,14 +786,17 @@ static BOOL _srvClientSend(PSERVDATA pServData, PCLNTDATA pClntData)
   if ( pClntData->pTXData == NULL )
   {
     // Detect buffer size.
-    ULONG    cbBuf;
+    static ULONG       cbBuf = 0;
 
-    lRC = sizeof(cbBuf);
-    if ( getsockopt( pClntData->iSock, SOL_SOCKET, SO_SNDBUF,
-                     (char *)&cbBuf, (int *)&lRC ) == -1 )
+    if ( cbBuf == 0 )  // 2019-06-12 Buffer size is determined only once.
     {
-      debugCP( "getsockopt() failed" );
-      cbBuf = (8 * 1024);
+      lRC = sizeof(cbBuf);
+      if ( getsockopt( pClntData->iSock, SOL_SOCKET, SO_SNDBUF,
+                       (char *)&cbBuf, (int *)&lRC ) == -1 )
+      {
+        debugCP( "getsockopt() failed" );
+        cbBuf = (8 * 1024);
+      }
     }
 
     // Allocate output buffer.
@@ -799,11 +808,16 @@ static BOOL _srvClientSend(PSERVDATA pServData, PCLNTDATA pClntData)
     }
 
     pTXData->cbBuf = cbBuf;
+
+    /* 2019-06-12 We do not allocate memory every time we need to send a chunk,
+       store buffer at client object. */
+    pClntData->pTXData = pTXData;
   }
   else
   {
-    // We have output buffer in the client's object, ok - use it.
-    // The buffer was stored because previous _srvClientSockSend() returns 0.
+    // We have output buffer in the client object, ok - use it.
+    // (The buffer was stored because previous _srvClientSockSend() returns 0.)
+    // 2019-06-12 Now: the buffer was stored when sending the first piece.
     pTXData = pClntData->pTXData;
   }
 
@@ -825,13 +839,19 @@ static BOOL _srvClientSend(PSERVDATA pServData, PCLNTDATA pClntData)
       // call it next time with same pointer to the buffer.
       // Store pointer to the buffer in the client's object - it will be used
       // on next function call.
-      pClntData->pTXData = pTXData;
+
+      /* 2019-06-12 Now we keep the buffer all the time while there is data to
+         send. The next line is commented out. */
+      //pClntData->pTXData = pTXData;
     }
     else
     {
       // Move context read pointer forward on number of bytes sent.
       ctxRead( pClntData->pCtx, lRC, NULL, FALSE );
-      pClntData->pTXData = NULL;
+
+      /* 2019-06-12 Now we keep the buffer all the time while there is data to
+         send. The next line is commented out. */
+      //pClntData->pTXData = NULL;
     }
 
     if ( lRC != ulActual )
@@ -839,10 +859,14 @@ static BOOL _srvClientSend(PSERVDATA pServData, PCLNTDATA pClntData)
       fEOF = FALSE;
   }
 
+  /* 2019-06-12 Now we keep the buffer all the time while there is data to
+     send. The block is commented out.
+
   if ( pClntData->pTXData == NULL )
     // Pointer to the output buffer was not stored in the client's object -
     // destroy it.
     free( pTXData );
+  */
 
   if ( fEOF )
     // All current output data has been sent. Destroy context object and
@@ -852,12 +876,13 @@ static BOOL _srvClientSend(PSERVDATA pServData, PCLNTDATA pClntData)
   return TRUE;
 }
 
-#if 0
-// No good for speed.
+#if _USE_WRITE_FILTER
+// No good for speed?
 
 // Called from ctxWrite() before storing data into context. The filter tries to
 // send data immediately before writing to the context. So we use context only
 // when the socket buffer is full.
+// See netsrvClntGetContext().
 static LONG cbCtxWriteFilter(ULONG cbBuf, PVOID pBuf, PVOID pData)
 {
   PCLNTDATA  pClntData = (PCLNTDATA)pData;
@@ -903,9 +928,10 @@ static BOOL _srvClientHaveOutputData(PCLNTDATA pClntData)
 
 static VOID threadClient(void *pData)
 {
-  PSERVDATA  pServData = (PSERVDATA)pData;
-  PCLNTDATA  pClntData;
-  ULONG      ulRC, ulWaitEvRC;
+  PSERVDATA            pServData = (PSERVDATA)pData;
+  PCLNTDATA            pClntData;
+  ULONG                ulRC, ulWaitEvRC;
+  int                  aiSock[2];
 #ifdef EXCEPTQ
   EXCEPTIONREGISTRATIONRECORD    exRegRec;
 
@@ -924,12 +950,12 @@ static VOID threadClient(void *pData)
   }
   pServData->cThreads++;
 
-  while( TRUE )
+  do
   {
+
     // Get next pending client (wait for).
 
     pClntData = NULL;
-
     while( (pServData->ulFlags & _SRVFL_STOP) == 0 )
     {
       // Extract an object from the "pending" list.
@@ -938,8 +964,6 @@ static VOID threadClient(void *pData)
       if ( pClntData != NULL )
       {
         lnkseqRemove( &pServData->lsPendClients, pClntData );
-        // Increase the counter of busy threads.
-        pServData->cThreadsBusy++;
         // The object was extracted.
         break;
       }
@@ -981,37 +1005,73 @@ static VOID threadClient(void *pData)
       // Client is not obtained - error or stop signal. Leave the thread.
       break;
 
+
+    /* We have a client object that is waiting to send data or has data to read
+       from the transport layer. */
+
+    // Increase the counter of busy threads.
+    pServData->cThreadsBusy++;
+
     DosReleaseMutexSem( pServData->hmtxClients );
 
-    // Read input data and call the protocol implementation function.
-    if ( !_srvClientRead( pClntData ) ||
-         !_srvClientSend( pServData, pClntData ) )
+    /* We do a cycle for sending/receiving data with a short wait for the
+       socket to send or new data to immediately process them in this thread,
+       without returning the client object to the main list. This gives a
+       significant acceleration.  */
+    do
     {
-      // Connection lost, session finished or some error occurred.
-      // Destroy client object.
-      _srvClientDestroy( pClntData );
-      pClntData = NULL;
-    }
+      if ( // Read input data and call the protocol implementation function.
+           !_srvClientRead( pClntData ) ||
+           // Immediately send the output data if any.
+           !_srvClientSend( pServData, pClntData ) )
+      {
+        // Connection lost, session finished or some error occurred.
+        // Destroy client object.
+        _srvClientDestroy( pClntData );
+        pClntData = NULL;
+        break;
+      }
 
-    // Return alive client object to main server client list to wait next event
-    // on socket. Decrease the counter of busy threads.
+      if ( (pClntData->ulFlags & _CLNTFL_SSLACCEPTINIT) != 0 )
+        /* We need to do something in netsrvProcess(). Do not wait a new data
+           here.  */
+        break;
+
+      // Prepare socket array for os2_select().
+      aiSock[0] = pClntData->iSock;        // Read socket.
+      if ( // SSL wants to re-send data.
+           ( ( pClntData->pSSL != NULL ) &&
+             ( (pClntData->ulFlags & _CLNTFL_SSLACCEPTWRITE) != 0 ) ) ||
+           // ... or we have output and not delayed data.
+           ( ( pClntData->pCtx != NULL ) &&
+             (pClntData->ulFlags & _CLNTFL_DELAYSEND) == 0 ) )
+      {
+        aiSock[1] = pClntData->iSock;      // Write socket.
+        ulRC = 1;
+      }
+      else
+        ulRC = 0;                          // No write socket.
+    }
+    while( // Wait a little time for events on socket.
+           ( os2_select( aiSock, 1, ulRC, 0, 700 ) > 0 ) &&
+           ( (pServData->ulFlags & _SRVFL_STOP) == 0 ) );
+
+
+    /* Work with the client object is finished. Return alive client object to
+       main server client list to wait next event on socket.  */
 
     ulRC = DosRequestMutexSem( pServData->hmtxClients, SEM_INDEFINITE_WAIT );
     if ( ulRC != NO_ERROR )
-    {
       debug( "#%u DosRequestMutexSem(), rc = %u", __LINE__, ulRC );
-      if ( pClntData != NULL )
-        _srvClientDestroy( pClntData );
-      break;
-    }
 
-    pServData->cThreadsBusy--;
-
+    // Return alive client object to the main client list.
     if ( pClntData != NULL )
-      // Return client object to the main client list.
       lnkseqAdd( &pServData->lsClients, pClntData );
 
-  }  // while( TRUE )
+    // Decrease the counter of busy threads.
+    pServData->cThreadsBusy--;
+  }
+  while( ulRC == NO_ERROR );
 
   pServData->cThreads--;
   DosReleaseMutexSem( pServData->hmtxClients );
@@ -1049,7 +1109,9 @@ PCTX netsrvClntGetContext(PCLNTDATA pClntData)
   if ( pClntData->pCtx == NULL )
   {
     pClntData->pCtx = ctxNew();
-//    ctxSetWriteFilter( pClntData->pCtx, cbCtxWriteFilter, pClntData );
+#ifdef _USE_WRITE_FILTER
+    ctxSetWriteFilter( pClntData->pCtx, cbCtxWriteFilter, pClntData );
+#endif
     pClntData->ulFlags &= ~_CLNTFL_WRITEFILTEROFF;
   }
 
@@ -1085,13 +1147,15 @@ VOID netsrvSetOutputDelay(PCLNTDATA pClntData, ULONG ulDelay)
 
 VOID netsrvClntSetRawInput(PCLNTDATA pClntData, ULLONG ullMaxRawBlock)
 {
-//  pClntData->ulMaxRawBlock = MIN( ullMaxRawBlock, _RAWINPUTMAXBLOCKSIZE );
-  ULONG    ulVal;
-  int      cbVal = sizeof(ulVal);
+  static ULONG         ulVal = 0;
+  int                  cbVal = sizeof(ulVal);
 
-  if ( getsockopt( pClntData->iSock, SOL_SOCKET, SO_RCVBUF, (char *)&ulVal,
-                   &cbVal ) == -1 )
-    ulVal = 65535;
+  if ( ulVal == 0 )    // 2019-06-13 Buffer size is determined only once.
+  {
+    if ( getsockopt( pClntData->iSock, SOL_SOCKET, SO_RCVBUF, (char *)&ulVal,
+                     &cbVal ) == -1 )
+      ulVal = 65535;
+  }
 
   pClntData->ulMaxRawBlock = MIN( ullMaxRawBlock, ulVal );
 }
@@ -1203,7 +1267,7 @@ PSERVDATA netsrvCreate(PNSPROTO pProtocol, PNSCREATEDATA pCreateData)
     return NULL;
   }
 
-  pServData = hcalloc( 1, sizeof(SERVDATA) );
+  pServData = calloc( 1, sizeof(SERVDATA) );
   if ( pServData == NULL )
     return NULL;
 
@@ -1240,9 +1304,13 @@ PSERVDATA netsrvCreate(PNSPROTO pProtocol, PNSCREATEDATA pCreateData)
       // Set the certificate and private key.
 
       if ( ( pCreateData->pszTLSCert == NULL ) ||
+/* 2019-03-05 SSL_CTX_use_certificate_file -> SSL_CTX_use_certificate_chain_file
+
            ( SSL_CTX_use_certificate_file( pServData->pSSLCtx,
                                            pCreateData->pszTLSCert,
-                                           SSL_FILETYPE_PEM ) <= 0 ) )
+                                           SSL_FILETYPE_PEM ) <= 0 ) )*/
+           ( SSL_CTX_use_certificate_chain_file( pServData->pSSLCtx,
+                                           pCreateData->pszTLSCert ) <= 0 ) )
       {
         debugCP( "Certificate load fail" );
         pCreateData->ulFlags |= (NSCRFL_TLS_INITFAIL | NSCRFL_TLS_CERTFAIL);
@@ -1277,19 +1345,20 @@ PSERVDATA netsrvCreate(PNSPROTO pProtocol, PNSCREATEDATA pCreateData)
       if ( (pCreateData->ulFlags & NSCRFL_TLS_REQUIRED) != 0 )
       {
         // TLS is required but cannot be initialized.
-        hfree( pServData );
+        free( pServData );
         return NULL;
       }
 
       pServData->pSSLCtx = NULL;
     }
+
   }  // NSCRFL_TLS_INIT or NSCRFL_TLS_REQUIRED flag is set by caller.
 
   ulRC = DosCreateMutexSem( NULL, &pServData->hmtxClients, 0, FALSE );
   if ( ulRC != NO_ERROR )
   {
     debug( "DosCreateMutexSem(), rc = %u", ulRC );
-    hfree( pServData );
+    free( pServData );
     return NULL;
   }
 
@@ -1299,7 +1368,7 @@ PSERVDATA netsrvCreate(PNSPROTO pProtocol, PNSCREATEDATA pCreateData)
   {
     debug( "DosCreateEventSem(), rc = %u", ulRC );
     DosCloseMutexSem( pServData->hmtxClients );
-    hfree( pServData );
+    free( pServData );
     return NULL;
   }
 
@@ -1326,12 +1395,21 @@ VOID netsrvDestroy(PSERVDATA pServData)
 {
   ULONG      ulIdx;
   ULONG      ulRC;
+  PCLNTDATA  pClntData;
 
   // Remove the server from the global servers list.
   lnkseqRemove( &lsServers, pServData );
 
   // Shutdown all threads.
+
   pServData->ulFlags |= _SRVFL_STOP;
+
+  // Cancel operations with pending client sockets. For quick threads shutdown.
+  for( pClntData = (PCLNTDATA)lnkseqGetFirst( &pServData->lsPendClients );
+       pClntData != NULL;
+       pClntData = (PCLNTDATA)lnkseqGetNext( pClntData ) )
+    so_cancel( pClntData->iSock );
+
   do
   {
     DosPostEventSem( pServData->hevPendClients );
@@ -1355,7 +1433,7 @@ VOID netsrvDestroy(PSERVDATA pServData)
       shutdown( pServData->paiSock[ulIdx], 1 );
       soclose( pServData->paiSock[ulIdx] );
     }
-    hfree( pServData->paiSock );
+    free( pServData->paiSock );
   }
 
   ulRC = DosCloseMutexSem( pServData->hmtxClients );
@@ -1369,7 +1447,7 @@ VOID netsrvDestroy(PSERVDATA pServData)
   if ( pServData->pSSLCtx != NULL )
     SSL_CTX_free( pServData->pSSLCtx );
 
-  hfree( pServData );
+  free( pServData );
 }
 
 BOOL netservBind(PSERVDATA pServData, ULONG ulAddr, USHORT usPort, BOOL fSSL)
@@ -1665,151 +1743,174 @@ BOOL netsrvProcess(ULONG ulTimeout)
   // Check read events on sockets for all servers.
 
   ulSSPos = 0;
-  for( pServData = (PSERVDATA)lnkseqGetFirst( &lsServers );
-       pServData != NULL; pServData = (PSERVDATA)lnkseqGetNext( pServData ) )
+  if ( cSelRead != 0 )
   {
-    _srvLockClients( pServData );
+    // Sockets for reading were passed to os2_select().
 
-    // Check listening sockets on server.
-
-    for( ulIdx = 0; ulIdx < pServData->cSock; ulIdx++ )
+    for( pServData = (PSERVDATA)lnkseqGetFirst( &lsServers );
+         pServData != NULL; pServData = (PSERVDATA)lnkseqGetNext( pServData ) )
     {
-      iSock = paiSelSock[ulSSPos];
-      ulSSPos++;
+      _srvLockClients( pServData );
 
-      if ( iSock == -1 )
-        continue;
+      // Check listening sockets on server.
 
-      cbSockAddrIn = sizeof(stSockAddrIn);
-      iClntSock = accept( iSock, (struct sockaddr *)&stSockAddrIn,
-                          &cbSockAddrIn );
-      if ( iClntSock < 0 )
+      for( ulIdx = 0; ulIdx < pServData->cSock; ulIdx++ )
       {
-        debug( "accept(), error: %u", sock_errno() );
-        continue;
-      }
-
-      ulRC = 1;
-      pClntData = NULL;
-
-      // Is connection limit reached?
-      if ( ( pServData->pProtocol->ulMaxClients != 0 ) &&
-           ( lnkseqGetCount( &pServData->lsClients ) >=
-               pServData->pProtocol->ulMaxClients ) )
-      {
-        if ( (pServData->ulFlags & _SRVFL_LOGGING) != 0 )
-          logf( 3, "%s Maximum connection limit reached (%lu)",
-                pServData->pProtocol->acLogId,
-                pServData->pProtocol->ulMaxClients );
-      }
-      else if ( ioctl( iClntSock, FIONBIO, (PCHAR)&ulRC ) == -1 )
-      {
-        debugCP( "ioctl() failed" );
-      }
-      else
-      {
-        pClntData = _srvClientNew( pServData, iClntSock,
-                                   ulIdx < pServData->ulFirstNonSSLSock );
-
-        if ( pClntData != NULL )
-          lnkseqAdd( &pServData->lsClients, pClntData );
-      }
-
-      if ( pClntData == NULL )
-        soclose( iClntSock );
-    }  // for( ulIdx = 0; ulIdx < pServData->cSock; ulIdx++ )
-
-    // Check sockets to read on server.
-
-    for( ulIdx = 0; ulIdx < pServData->cSelReadSock; ulIdx++ )
-    {
-      iSock = paiSelSock[ulSSPos];
-      ulSSPos++;
-
-      if ( iSock == -1 )
-        continue;
-
-      for( pClntData = (PCLNTDATA)lnkseqGetFirst( &pServData->lsClients );
-           pClntData != NULL; pClntData = (PCLNTDATA)lnkseqGetNext( pClntData ) )
-      {
-        if ( iSock != pClntData->iSock )
+        iSock = paiSelSock[ulSSPos];
+        ulSSPos++;
+        if ( iSock == -1 )
           continue;
 
-        if ( (pClntData->ulFlags & _CLNTFL_SSLACCEPTREAD) != 0 )
+        cSelSock--;
+        cbSockAddrIn = sizeof(stSockAddrIn);
+        iClntSock = accept( iSock, (struct sockaddr *)&stSockAddrIn,
+                            &cbSockAddrIn );
+        if ( iClntSock < 0 )
+          debug( "accept(), error: %u", sock_errno() );
+        else
         {
-          if ( ( pClntData->pCtx == NULL ) && !_srvClientSSLAccept( pClntData ) )
+          ulRC = 1;
+          pClntData = NULL;
+
+          // Is connection limit reached?
+          if ( ( pServData->pProtocol->ulMaxClients != 0 ) &&
+               ( lnkseqGetCount( &pServData->lsClients ) >=
+                   pServData->pProtocol->ulMaxClients ) )
           {
-            lnkseqRemove( &pServData->lsClients, pClntData );
-            _srvClientDestroy( pClntData );
+            if ( (pServData->ulFlags & _SRVFL_LOGGING) != 0 )
+              logf( 3, "%s Maximum connection limit reached (%lu)",
+                    pServData->pProtocol->acLogId,
+                    pServData->pProtocol->ulMaxClients );
           }
-        }
-        else if ( (pClntData->ulFlags & _CLNTFL_SSLACCEPTWRITE) == 0 )
+          else if ( ioctl( iClntSock, FIONBIO, (PCHAR)&ulRC ) == -1 )
+            debugCP( "ioctl() failed" );
+          else
+          {
+            pClntData = _srvClientNew( pServData, iClntSock,
+                                       ulIdx < pServData->ulFirstNonSSLSock );
+
+            if ( pClntData != NULL )
+              lnkseqAdd( &pServData->lsClients, pClntData );
+          }
+
+          if ( pClntData == NULL )
+            soclose( iClntSock );
+        }  // if ( iClntSock < 0 ) else
+
+        if ( cSelSock == 0 )
+          break;
+      }  // for( ulIdx = 0; ulIdx < pServData->cSock; ulIdx++ )
+
+      // Check sockets to read on server.
+
+      if ( cSelSock != 0 )
+      {
+        for( ulIdx = 0; ulIdx < pServData->cSelReadSock; ulIdx++ )
         {
-          // Read input data in other thread.
+          iSock = paiSelSock[ulSSPos];
+          ulSSPos++;
+          if ( iSock == -1 )
+            continue;
 
-          lnkseqRemove( &pServData->lsClients, pClntData );
-          lnkseqAdd( &pServData->lsPendClients, pClntData );
+          cSelSock--;
 
-          // Send a signal to the thread(s) about the new pending client.
-          ulRC = DosPostEventSem( pServData->hevPendClients );
-          if ( ( ulRC != NO_ERROR ) || ( ulRC == ERROR_ALREADY_POSTED ) )
-            debug( "DosPostEventSem(), rc = %u", ulRC );
-        }
+          for( pClntData = (PCLNTDATA)lnkseqGetFirst( &pServData->lsClients );
+               pClntData != NULL; pClntData = (PCLNTDATA)lnkseqGetNext( pClntData ) )
+          {
+            if ( iSock != pClntData->iSock )
+              continue;
 
-        break;
-      }  // for( pClntData ...
-    }  // for( ulIdx = 0; ulIdx < pServData->cSelReadSock; ulIdx++ )
+            if ( (pClntData->ulFlags & _CLNTFL_SSLACCEPTREAD) != 0 )
+            {
+              if ( ( pClntData->pCtx == NULL ) && !_srvClientSSLAccept( pClntData ) )
+              {
+                lnkseqRemove( &pServData->lsClients, pClntData );
+                _srvClientDestroy( pClntData );
+              }
+            }
+            else if ( (pClntData->ulFlags & _CLNTFL_SSLACCEPTWRITE) == 0 )
+            {
+              // Read input data in other thread.
 
-    _srvUnlockClients( pServData );
+              lnkseqRemove( &pServData->lsClients, pClntData );
+              lnkseqAdd( &pServData->lsPendClients, pClntData );
 
-  }  // for( pServData ...
+              // Send a signal to the thread(s) about the new pending client.
+              ulRC = DosPostEventSem( pServData->hevPendClients );
+              if ( ( ulRC != NO_ERROR ) || ( ulRC == ERROR_ALREADY_POSTED ) )
+                debug( "DosPostEventSem(), rc = %u", ulRC );
+            }
+
+            break;
+          }  // for( pClntData ...
+
+          if ( cSelSock == 0 )   // No more ready sockets.
+            break;
+        }  // for( ulIdx = 0; ulIdx < pServData->cSelReadSock; ulIdx++ )
+      }  // if ( cSelSock != 0 )
+
+      _srvUnlockClients( pServData );
+
+    }  // for( pServData ...
+  }  // if ( cSelRead != 0 )
 
 
   // Check write events on sockets for all servers.
 
-  for( pServData = (PSERVDATA)lnkseqGetFirst( &lsServers );
-       pServData != NULL; pServData = (PSERVDATA)lnkseqGetNext( pServData ) )
+  if ( cSelSock != 0 )
   {
-    _srvLockClients( pServData );
+    // We still have sockets that have not yet been tested.
 
-    for( ulIdx = 0; ulIdx < pServData->cSelWriteSock; ulIdx++ )
+    for( pServData = (PSERVDATA)lnkseqGetFirst( &lsServers );
+         pServData != NULL; pServData = (PSERVDATA)lnkseqGetNext( pServData ) )
     {
-      iSock = paiSelSock[ulSSPos];
-      ulSSPos++;
+      _srvLockClients( pServData );
 
-      if ( iSock == -1 )
-        continue;
-
-      for( pClntData = (PCLNTDATA)lnkseqGetFirst( &pServData->lsClients );
-           pClntData != NULL;
-           pClntData = (PCLNTDATA)lnkseqGetNext( pClntData ) )
+      for( ulIdx = 0; ulIdx < pServData->cSelWriteSock; ulIdx++ )
       {
-        if ( iSock == pClntData->iSock )
+        iSock = paiSelSock[ulSSPos];
+        ulSSPos++;
+        if ( iSock == -1 )
+          continue;
+
+        cSelSock--;
+
+        for( pClntData = (PCLNTDATA)lnkseqGetFirst( &pServData->lsClients );
+             pClntData != NULL;
+             pClntData = (PCLNTDATA)lnkseqGetNext( pClntData ) )
         {
-          BOOL fSuccess;
-
-          if ( (pClntData->ulFlags & _CLNTFL_SSLACCEPTWRITE) != 0 )
-            fSuccess = _srvClientSSLAccept( pClntData );
-          else if ( pClntData->pCtx != NULL )
-            fSuccess = _srvClientSend( pServData, pClntData );
-          else
-            break;
-
-          if ( !fSuccess )
+          if ( iSock == pClntData->iSock )
           {
-            lnkseqRemove( &pServData->lsClients, pClntData );
-            _srvClientDestroy( pClntData );
+            BOOL fSuccess;
+
+            if ( (pClntData->ulFlags & _CLNTFL_SSLACCEPTWRITE) != 0 )
+              fSuccess = _srvClientSSLAccept( pClntData );
+            else if ( pClntData->pCtx != NULL )
+              fSuccess = _srvClientSend( pServData, pClntData );
+            else
+              break;
+
+            if ( !fSuccess )
+            {
+              lnkseqRemove( &pServData->lsClients, pClntData );
+              _srvClientDestroy( pClntData );
+            }
+
+            break;
           }
+        }  // for( pClntData ...
 
+        if ( cSelSock == 0 )     // No more ready sockets.
           break;
-        }
-      }  // for( pClntData ...
-    }  // for( ulIdx = 0; ulIdx < pServData->cSelWriteSock; ulIdx++ )
+      }  // for( ulIdx = 0; ulIdx < pServData->cSelWriteSock; ulIdx++ )
 
-    _srvUnlockClients( pServData );
+      _srvUnlockClients( pServData );
 
-  }  // for( pServData ...
+    }  // for( pServData ...
+  }  // if ( cSelSock != 0 )
 
+  if ( cSelSock != 0 )
+    debug( "WTF?! There are %d untested sockets left\n", cSelSock );
 
   return TRUE;  
 }

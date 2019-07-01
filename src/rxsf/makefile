@@ -3,7 +3,7 @@
 #
 
 NAME         = rxsf
-VERSION      = 1.0.1
+VERSION      = 1.0.2
 DESCRIPTION  = REXX interface for SpamFilter and imapd
 AUTOR        = Andrey Vasilkin
 
@@ -16,7 +16,7 @@ DEFFILE = $(NAME).def
 DBGFILE = $(NAME).dbg
 
 # Sources
-SRCS = rxsf.c utils.c
+SRCS = rxsf.c
 
 # Libraries (-Lpath -lname ...)
 LIBS =

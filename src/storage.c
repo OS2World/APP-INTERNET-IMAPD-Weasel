@@ -9,7 +9,6 @@
 #include <libxml/tree.h>
 #include "linkseq.h"
 #include "utils.h"
-#include "hmem.h"
 #include "log.h"
 #include "wcfg.h"
 #include "context.h"
@@ -76,7 +75,7 @@ static BOOL _getQuotasFName(ULONG cbBuf, PCHAR pcBuf)
 
 static VOID _userFree(PUSER pUser)
 {
-  hfree( pUser );
+  free( pUser );
 }
 
 static VOID _domainFree(PDOMAIN pDomain)
@@ -87,9 +86,9 @@ static VOID _domainFree(PDOMAIN pDomain)
     _userFree( pDomain->papUsers[ulIdx] );
 
   if ( pDomain->papUsers != NULL )
-    hfree( pDomain->papUsers );
+    free( pDomain->papUsers );
 
-  hfree( pDomain );
+  free( pDomain );
 }
 
 static int _compSearchDomain(const void *p1, const void *p2)
@@ -118,7 +117,7 @@ static BOOL _insertDomain(PSZ pszDomain, PDOMAIN *ppDomain)
     return FALSE;
   }
 
-  pDomain = hcalloc( 1, sizeof(DOMAIN) + STR_LEN( pszDomain ) );
+  pDomain = calloc( 1, sizeof(DOMAIN) + STR_LEN( pszDomain ) );
   *ppDomain = pDomain;
 
   if ( pDomain == NULL )
@@ -131,11 +130,11 @@ static BOOL _insertDomain(PSZ pszDomain, PDOMAIN *ppDomain)
 
   if ( (cDomains & 0x07) == 0 )
   {
-    PDOMAIN          *papNew = hrealloc( papDomains,
+    PDOMAIN          *papNew = realloc( papDomains,
                                          (cDomains + 8) * sizeof(PDOMAIN) );
     if ( papNew == NULL )
     {
-      hfree( pDomain );
+      free( pDomain );
       *ppDomain = NULL;
       return FALSE;
     }
@@ -165,7 +164,7 @@ static BOOL _insertUser(PDOMAIN pDomain, PSZ pszUser, PUSER *ppUser)
     return FALSE;
   }
 
-  pUser = hcalloc( 1, sizeof(USER) + strlen( pszUser ) );
+  pUser = calloc( 1, sizeof(USER) + strlen( pszUser ) );
   *ppUser = pUser;
 
   if ( pUser == NULL )
@@ -175,11 +174,11 @@ static BOOL _insertUser(PDOMAIN pDomain, PSZ pszUser, PUSER *ppUser)
 
   if ( (pDomain->cUsers & 0xFF) == 0 )
   {
-    PUSER        *papNew = hrealloc( pDomain->papUsers,
+    PUSER        *papNew = realloc( pDomain->papUsers,
                                (pDomain->cUsers + 0x0100) * sizeof(PUSER) );
     if ( papNew == NULL )
     {
-      hfree( pUser );
+      free( pUser );
       *ppUser = NULL;
       return FALSE;
     }
@@ -224,7 +223,7 @@ static BOOL __ruhAdd(struct _RUHDATA *pData)
       {
         if ( (pData->pList->ulCount & 0xFF) == 0 )
         {
-          PMSFILE *pNew = hrealloc( pData->pList->papFiles,
+          PMSFILE *pNew = realloc( pData->pList->papFiles,
                           (pData->pList->ulCount + 0x0100) * sizeof(PMSFILE) );
           if ( pNew == NULL )
           {
@@ -234,7 +233,7 @@ static BOOL __ruhAdd(struct _RUHDATA *pData)
           pData->pList->papFiles = pNew;
         }
 
-        pFile = hmalloc( sizeof(MSFILE) + strlen( pFind->achName ) );
+        pFile = malloc( sizeof(MSFILE) + strlen( pFind->achName ) );
         if ( pFile == NULL )
         {
           debugCP( "Not enough memory" );
@@ -693,13 +692,13 @@ static VOID _qSync()
 
     if ( pszLetterFrom != NULL )
     {
-      hfree( pszLetterFrom );
+      free( pszLetterFrom );
       pszLetterFrom = NULL;
     }
 
     if ( pszLetterBody != NULL )
     {
-      hfree( pszLetterBody );
+      free( pszLetterBody );
       pszLetterBody = NULL;
     }
 
@@ -733,7 +732,7 @@ static VOID _qSync()
         {
           // Get "from" attribute of the "body" node.
 
-          pszLetterBody = hstrdup( pszVal );
+          pszLetterBody = strdup( pszVal );
           pszVal = xmlGetNoNsProp( pxmlNode, "from" );
           if ( ( pszVal != NULL ) && ( *pszVal != '\0' ) )
           {
@@ -749,7 +748,7 @@ static VOID _qSync()
               if ( pszVal[cbVal - 1] == '@' )
                 cbVal--;
 
-              pszLetterFrom = hmalloc( cbVal + 1 );
+              pszLetterFrom = malloc( cbVal + 1 );
               if ( pszLetterFrom != NULL )
               {
                 memcpy( pszLetterFrom, pszVal, cbVal );
@@ -932,13 +931,13 @@ VOID msDone()
     _domainFree( papDomains[ulIdx] );
 
   if ( papDomains != NULL )
-    hfree( papDomains );
+    free( papDomains );
 
   if ( pszLetterFrom != NULL )
-    hfree( pszLetterFrom );
+    free( pszLetterFrom );
 
   if ( pszLetterBody != NULL )
-    hfree( pszLetterBody );
+    free( pszLetterBody );
 }
 
 VOID msSync()
@@ -1144,11 +1143,11 @@ VOID msListDestroy(PMSLIST pList)
   for( ulIdx = 0; ulIdx < pList->ulCount; ulIdx++ )
   {
     if ( pList->papFiles[ulIdx] != NULL )
-      hfree( pList->papFiles[ulIdx] );
+      free( pList->papFiles[ulIdx] );
   }
 
   if ( pList->papFiles != NULL )
-    hfree( pList->papFiles );
+    free( pList->papFiles );
 
   pList->papFiles = NULL;
   pList->ulCount = 0;
@@ -1162,7 +1161,7 @@ BOOL msListRemove(PMSLIST pList, PSZ pszFName)
   {
     if ( STR_ICMP( pList->papFiles[ulIdx]->acName, pszFName ) == 0 )
     {
-      hfree( pList->papFiles[ulIdx] );
+      free( pList->papFiles[ulIdx] );
       pList->ulCount--;
       pList->papFiles[ulIdx] = pList->papFiles[pList->ulCount];
       return TRUE;
@@ -1177,7 +1176,7 @@ BOOL msListRemoveIdx(PMSLIST pList, ULONG ulIdx)
   if ( ulIdx >= pList->ulCount )
     return FALSE;
 
-  hfree( pList->papFiles[ulIdx] );
+  free( pList->papFiles[ulIdx] );
   pList->ulCount--;
   pList->papFiles[ulIdx] = pList->papFiles[pList->ulCount];
   return TRUE;
@@ -1826,6 +1825,7 @@ VOID msSendExceededQuotaEMail(PSZ pszRcpt, ULONG cObjects, PSZ *ppszObjects,
   DosWrite( hFile, pcHeader, cbHeader, &cbActual );
   free( pcHeader );
 
+  ctxSetReadPos( pCtx, CTX_RPO_BEGIN, 0 );
   ctxFileWrite( pCtx, hFile );
   ctxFree( pCtx );
   DosClose( hFile );

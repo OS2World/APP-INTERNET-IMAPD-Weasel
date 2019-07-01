@@ -5,8 +5,8 @@
 void main()
 {
   char       acBuf[128];
-//  char       *inbuf = "Тест - проверка"; // KOI8-R string.
-  char       *inbuf = "Test"; // KOI8-R string.
+  char       *inbuf = "Тест - проверка"; // KOI8-R string.
+//  char       *inbuf = "Test"; // KOI8-R string.
   size_t     inbytesleft = strlen( inbuf );
   char       *outbuf = acBuf;
   size_t     outbytesleft = sizeof( acBuf );
